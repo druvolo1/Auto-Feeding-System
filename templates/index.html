@@ -161,6 +161,7 @@
                         <th>System Name</th>
                         <th>Plant Name</th>
                         <th>Start Date</th>
+                        <th>System Volume</th>
                         <th>Current pH</th>
                         <th>Feeding in Progress</th>
                         <th>Allow Remote Feeding</th>
@@ -183,6 +184,7 @@
                     plant.system_name || 'Unknown',
                     plant.plant_name || 'N/A',
                     plant.start_date || 'N/A',
+                    plant.system_volume || 'N/A',
                     plant.current_ph !== null ? plant.current_ph : 'N/A',
                     plant.feeding_in_progress ? 'Yes' : 'No',
                     plant.settings.allow_remote_feeding ? 'Yes' : 'No',
