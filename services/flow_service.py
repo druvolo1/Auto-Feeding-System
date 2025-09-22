@@ -15,7 +15,7 @@ def flow_reader():
         print("[DEBUG] GPIO setup complete on pin 18. Starting polling loop...")
     except Exception as e:
         print(f"[ERROR] GPIO setup failed: {e}")
-        return  # Exit if setup fails (e.g., permissions)
+        return
 
     while True:
         try:
@@ -31,7 +31,7 @@ def flow_reader():
                 last_state = current_state
                 time.sleep(0.001)  # Poll every 1ms
 
-            flow_rate = (pulse_count / CALIBRATION_FACTOR) / 60  # L/min
+            flow_rate = pulse_count / CALIBRATION_FACTOR  # FIXED: Remove /60 for L/min (pulses/sec / factor = L/min)
             print(f"[DEBUG] Pulses in last second: {pulse_count}, Calculated flow: {flow_rate} L/min")
 
             with flow_lock:

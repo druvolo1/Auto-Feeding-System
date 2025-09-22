@@ -35,7 +35,8 @@ def broadcast_flow_rates():
                 flow_rate = round(flow_rate, 2)
                 if flow_rate != last_emitted_value:
                     last_emitted_value = flow_rate
-                    socketio.emit('flow_update', {'flow': flow_rate})
+                    print(f"[DEBUG] Emitting flow_update: {flow_rate} L/min")  # NEW: Confirm emit
+                    socketio.emit('flow_update', {'flow': flow_rate}, namespace='/status')  # FIXED: Add namespace
             eventlet.sleep(1)
         except Exception as e:
             print(f"[ERROR] Broadcast error: {e}")
