@@ -12,19 +12,12 @@ import time
 from api.fresh_flow import fresh_flow_blueprint
 from api.feed_flow import feed_flow_blueprint
 from api.drain_flow import drain_flow_blueprint
-from api.settings import settings_blueprint
+from api.settings import settings_blueprint, load_settings
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
 from services.feed_flow_service import get_latest_flow_rate as get_latest_feed_flow_rate, get_total_volume as get_feed_total_volume, reset_total as reset_feed_total, flow_reader as feed_flow_reader
 from services.drain_flow_service import get_latest_flow_rate as get_latest_drain_flow_rate, get_total_volume as get_drain_total_volume, reset_total as reset_drain_total, flow_reader as drain_flow_reader
-
-# Assume these exist from the other project for local data
-from services.ph_service import get_current_ph  # Placeholder, implement as needed
-from services.water_level_service import get_water_levels  # Placeholder
-from services.feeding_service import get_feeding_in_progress  # Placeholder
-from services.valve_service import get_valve_info  # Placeholder
-from api.settings import load_settings  # To get additional_plants and local settings
 
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
@@ -44,7 +37,7 @@ app.register_blueprint(drain_flow_blueprint, url_prefix='/api/drain_flow')
 app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
 
 # Shared state for remote plants
-plant_data = {}  # { 'local': {...}, 'plant_ip': {...} }
+plant_data = {}  # { 'plant_ip': {...} }
 plant_lock = Lock()
 plant_clients = {}  # { 'plant_ip': sio_client }
 
@@ -102,36 +95,16 @@ def monitor_remote_plants():
         
         eventlet.sleep(60)  # Check for changes every minute
 
-def get_local_status():
-    settings = load_settings()
-    return {
-        'settings': settings,
-        'current_ph': get_current_ph(),  # Assume implemented
-        'valve_info': get_valve_info(),  # Assume
-        'water_level': get_water_levels(),  # Assume
-        'feeding_in_progress': get_feeding_in_progress(),  # Assume
-        'last_update': time.time() * 1000,
-        'ip': 'local',
-        'system_name': settings.get('system_name', 'Local'),
-        'plant_name': settings.get('plant_info', {}).get('name', 'N/A'),
-        'start_date': settings.get('plant_info', {}).get('start_date', 'N/A')
-    }
-
 def broadcast_plants_status():
     last_emitted = None
     while True:
         try:
             with plant_lock:
                 aggregated = {'plants': []}
-                # Add local
-                local_status = get_local_status()
-                plant_data['local'] = local_status
-                aggregated['plants'].append(local_status)
                 
-                # Add remotes
+                # Add remotes only
                 for plant, data in plant_data.items():
-                    if plant != 'local':
-                        aggregated['plants'].append(data)
+                    aggregated['plants'].append(data)
                 
                 current_data = aggregated
                 
