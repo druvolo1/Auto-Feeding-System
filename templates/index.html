@@ -85,7 +85,7 @@
                 // Add water level columns (flipped logic: triggered means Present)
                 sensorKeys.forEach(key => {
                     const sensor = plant.water_level?.[key] || {triggered: false};
-                    const status = sensor.triggered ? 'Present' : 'Not Present';
+                    const status = sensor.triggered ? 'Not Present' : 'Present';
                     row.insertCell().innerText = status;
                 });
 
