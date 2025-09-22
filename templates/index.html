@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>Flow Meter Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
     <script>
         const socket = io.connect('http://' + document.domain + ':' + location.port + '/status');
@@ -53,21 +56,41 @@
     </script>
 </head>
 <body>
-    <h1>Flow Meter Monitor</h1>
-    
-    <h2>Fresh Water</h2>
-    <p>Current Flow Rate: <span id="fresh-flow-rate">Loading...</span></p>
-    <p>Total Volume: <span id="fresh-total-volume">Loading...</span></p>
-    <button onclick="resetFreshTotal()">Reset Fresh Total Volume</button>
-    
-    <h2>Feed Water</h2>
-    <p>Current Flow Rate: <span id="feed-flow-rate">Loading...</span></p>
-    <p>Total Volume: <span id="feed-total-volume">Loading...</span></p>
-    <button onclick="resetFeedTotal()">Reset Feed Total Volume</button>
-    
-    <h2>Drain</h2>
-    <p>Current Flow Rate: <span id="drain-flow-rate">Loading...</span></p>
-    <p>Total Volume: <span id="drain-total-volume">Loading...</span></p>
-    <button onclick="resetDrainTotal()">Reset Drain Total Volume</button>
+    <nav>
+        <ul>
+            <li><a href="#" class="active">Home</a></li>
+            <li><a href="#">Settings</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1>Flow Meter Monitor</h1>
+        <p class="subtitle">Monitor & adjust your garden with confidence.</p>
+
+        <div class="row-flex">
+            <div class="data-container">
+                <h3>Fresh Water</h3>
+                <div class="data-box">Current Flow Rate: <span id="fresh-flow-rate">Loading...</span></div>
+                <div class="data-box">Total Volume: <span id="fresh-total-volume">Loading...</span></div>
+                <button onclick="resetFreshTotal()">Reset Fresh Total Volume</button>
+            </div>
+
+            <div class="data-container">
+                <h3>Feed Water</h3>
+                <div class="data-box">Current Flow Rate: <span id="feed-flow-rate">Loading...</span></div>
+                <div class="data-box">Total Volume: <span id="feed-total-volume">Loading...</span></div>
+                <button onclick="resetFeedTotal()">Reset Feed Total Volume</button>
+            </div>
+
+            <div class="data-container">
+                <h3>Drain</h3>
+                <div class="data-box">Current Flow Rate: <span id="drain-flow-rate">Loading...</span></div>
+                <div class="data-box">Total Volume: <span id="drain-total-volume">Loading...</span></div>
+                <button onclick="resetDrainTotal()">Reset Drain Total Volume</button>
+            </div>
+        </div>
+
+        <p class="last-updated">Last updated: Never</p>
+    </main>
 </body>
 </html>
