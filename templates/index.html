@@ -42,6 +42,16 @@
         #connection-status.disconnected {
             color: red;
         }
+        .indicator {
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .indicator.full {
+            color: green;
+        }
+        .indicator.empty {
+            color: red;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
 </head>
@@ -68,7 +78,7 @@
             </div>
 
             <div class="data-container">
-                <h3>Feed Water</h3>
+                <h3>Feed Water <span id="feed-level-status" class="indicator"></span></h3>
                 <div class="data-box">Current Flow Rate: <span id="feed-flow-rate">Loading...</span></div>
                 <div class="data-box">Total Volume: <span id="feed-total-volume">Loading...</span></div>
                 <button onclick="resetFeedTotal()">Reset Feed Total Volume</button>
@@ -127,13 +137,23 @@
             console.log('Disconnected');
         });
 
-        socket.on('flow_update', function(data) {
+        socket.on('local_status_update', function(data) {
             document.getElementById('fresh-flow-rate').innerText = (data.fresh_flow !== null ? data.fresh_flow + ' Gal/min' : 'Loading...');
             document.getElementById('fresh-total-volume').innerText = (data.fresh_total_volume !== null ? data.fresh_total_volume + ' Gal' : 'Loading...');
             document.getElementById('feed-flow-rate').innerText = (data.feed_flow !== null ? data.feed_flow + ' Gal/min' : 'Loading...');
             document.getElementById('feed-total-volume').innerText = (data.feed_total_volume !== null ? data.feed_total_volume + ' Gal' : 'Loading...');
             document.getElementById('drain-flow-rate').innerText = (data.drain_flow !== null ? data.drain_flow + ' Gal/min' : 'Loading...');
             document.getElementById('drain-total-volume').innerText = (data.drain_total_volume !== null ? data.drain_total_volume + ' Gal' : 'Loading...');
+
+            const feedLevelStatus = document.getElementById('feed-level-status');
+            if (data.feed_level) {
+                feedLevelStatus.innerText = data.feed_level;
+                feedLevelStatus.classList.remove('full', 'empty');
+                feedLevelStatus.classList.add(data.feed_level.toLowerCase());
+            } else {
+                feedLevelStatus.innerText = 'Unknown';
+                feedLevelStatus.classList.remove('full', 'empty');
+            }
 
             const now = new Date();
             document.getElementById('last-updated').innerText = `Last updated: ${now.toLocaleString()}`;

@@ -17,12 +17,14 @@ from api.settings import settings_blueprint, load_settings
 from api.debug import debug_blueprint, debug_states
 from api.logs import log_blueprint
 from api.valve_relay import valve_relay_blueprint
+from api.feed_level import feed_level_blueprint
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
 from services.feed_flow_service import get_latest_flow_rate as get_latest_feed_flow_rate, get_total_volume as get_feed_total_volume, reset_total as reset_feed_total, flow_reader as feed_flow_reader
 from services.drain_flow_service import get_latest_flow_rate as get_latest_drain_flow_rate, get_total_volume as get_drain_total_volume, reset_total as reset_drain_total, flow_reader as drain_flow_reader
 from services.valve_relay_service import reinitialize_relay_service, get_relay_status
+from services.feed_level_service import get_feed_level
 
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
@@ -43,6 +45,7 @@ app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
 app.register_blueprint(debug_blueprint, url_prefix='/debug')
 app.register_blueprint(log_blueprint, url_prefix='/api/logs')
 app.register_blueprint(valve_relay_blueprint, url_prefix='/api/valve_relay')
+app.register_blueprint(feed_level_blueprint, url_prefix='/api/feed_level')
 
 # Shared state for remote plants
 plant_data = {}  # { 'plant_ip': {...} }
@@ -163,7 +166,8 @@ def broadcast_local_status():
         'fresh_flow': None, 'fresh_total_volume': None,
         'feed_flow': None, 'feed_total_volume': None,
         'drain_flow': None, 'drain_total_volume': None,
-        'relay1_status': None, 'relay2_status': None
+        'relay1_status': None, 'relay2_status': None,
+        'feed_level': None
     }
     while True:
         try:
@@ -175,6 +179,7 @@ def broadcast_local_status():
             drain_total_volume = get_drain_total_volume()
             relay1_status = get_relay_status(1)
             relay2_status = get_relay_status(2)
+            feed_level = get_feed_level()
 
             data = {
                 'fresh_flow': round(fresh_flow_rate, 2) if fresh_flow_rate is not None else None,
@@ -184,7 +189,8 @@ def broadcast_local_status():
                 'drain_flow': round(drain_flow_rate, 2) if drain_flow_rate is not None else None,
                 'drain_total_volume': round(drain_total_volume, 2) if drain_total_volume is not None else None,
                 'relay1_status': relay1_status,
-                'relay2_status': relay2_status
+                'relay2_status': relay2_status,
+                'feed_level': feed_level
             }
 
             if data != last_emitted:
