@@ -21,16 +21,59 @@
         }
     </style>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            loadSettings();
-            fetchUsbDevices(); // Add this to load USB devices
-        });
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSettings();
 
-        function loadSettings() {
-            fetch('/api/settings')
-                .then(response => response.json())
-                .then(data => {
-                    const plantsList = document.getElementById('additional-plants-list');
+        // Handle USB assignment form submit
+        const valveForm = document.getElementById('valve-relay-form');
+        if (valveForm) {
+            valveForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const device = document.getElementById('valve-relay-device')?.value;
+                if (device) {
+                    saveUsbAssignment('valve_relay', device);
+                } else {
+                    alert('Please select a device.');
+                }
+            });
+        }
+
+        // Handle relay ports form submit
+        const relayPortForm = document.getElementById('relay-port-form');
+        if (relayPortForm) {
+            relayPortForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const feedPort = parseInt(document.getElementById('feed-water-relay-port')?.value, 10);
+                const freshPort = parseInt(document.getElementById('fresh-water-relay-port')?.value, 10);
+                if (!isNaN(feedPort) && !isNaN(freshPort)) {
+                    fetch('/api/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ relay_ports: { feed_water: feedPort, fresh_water: freshPort } })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert('Relay ports saved successfully.');
+                                loadSettings();
+                            } else {
+                                alert('Failed to save relay ports: ' + data.error);
+                            }
+                        })
+                        .catch(error => console.error('Error saving relay ports:', error));
+                } else {
+                    alert('Please select valid ports.');
+                }
+            });
+        }
+    });
+
+    function loadSettings() {
+        fetch('/api/settings')
+            .then(response => response.json())
+            .then(data => {
+                const plantsList = document.getElementById('additional-plants-list');
+                if (plantsList) {
                     plantsList.innerHTML = '';
                     data.additional_plants.forEach((plant, index) => {
                         const div = document.createElement('div');
@@ -41,121 +84,137 @@
                         `;
                         plantsList.appendChild(div);
                     });
+                }
 
-                    data.calibration_factors = data.calibration_factors || {};
-                    document.getElementById('fresh-cal').value = data.calibration_factors.fresh || 28.390575;
-                    document.getElementById('feed-cal').value = data.calibration_factors.feed || 28.390575;
-                    document.getElementById('drain-cal').value = data.calibration_factors.drain || 28.390575;
+                data.calibration_factors = data.calibration_factors || {};
+                const freshCal = document.getElementById('fresh-cal');
+                if (freshCal) freshCal.value = data.calibration_factors.fresh || 28.390575;
+                const feedCal = document.getElementById('feed-cal');
+                if (feedCal) feedCal.value = data.calibration_factors.feed || 28.390575;
+                const drainCal = document.getElementById('drain-cal');
+                if (drainCal) drainCal.value = data.calibration_factors.drain || 28.390575;
 
-                    // Load relay ports
-                    const relayPorts = data.relay_ports || { feed_water: 1, fresh_water: 2 };
-                    document.getElementById('feed-water-relay-port').value = relayPorts.feed_water;
-                    document.getElementById('fresh-water-relay-port').value = relayPorts.fresh_water;
-                })
-                .catch(error => console.error('Error loading settings:', error));
-        }
+                // Load relay ports
+                const relayPorts = data.relay_ports || { feed_water: 1, fresh_water: 2 };
+                const feedPortEl = document.getElementById('feed-water-relay-port');
+                if (feedPortEl) feedPortEl.value = relayPorts.feed_water;
+                const freshPortEl = document.getElementById('fresh-water-relay-port');
+                if (freshPortEl) freshPortEl.value = relayPorts.fresh_water;
 
-        function addAdditionalPlant() {
-            const newIp = document.getElementById('new-plant-ip').value.trim();
-            if (!newIp) {
-                alert('Please enter a valid IP or DNS.');
-                return;
-            }
-
-            fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ additional_plants: [newIp] })  // Send as array to append
+                // Load and populate USB devices with pre-selection
+                data.usb_roles = data.usb_roles || {};
+                populateUsbDevices(data.usb_roles.valve_relay);
             })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        document.getElementById('new-plant-ip').value = '';
-                        loadSettings();
-                    } else {
-                        alert('Failed to add plant: ' + data.error);
-                    }
-                })
-                .catch(error => console.error('Error adding plant:', error));
-        }
+            .catch(error => console.error('Error loading settings:', error));
+    }
 
-        function removePlant(index) {
-            fetch('/api/settings/remove_plant', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ index: index })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        loadSettings();
-                    } else {
-                        alert('Failed to remove plant: ' + data.error);
-                    }
-                })
-                .catch(error => console.error('Error removing plant:', error));
-        }
-
-        function saveCalibrationFactors() {
-            const fresh = parseFloat(document.getElementById('fresh-cal').value);
-            const feed = parseFloat(document.getElementById('feed-cal').value);
-            const drain = parseFloat(document.getElementById('drain-cal').value);
-
-            if (isNaN(fresh) || isNaN(feed) || isNaN(drain)) {
-                alert('Please enter valid numbers for all calibration factors.');
-                return;
-            }
-
-            fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ calibration_factors: { fresh, feed, drain } })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        alert('Calibration factors saved successfully.');
-                        loadSettings();  // Reload to confirm
-                    } else {
-                        alert('Failed to save calibration factors: ' + data.error);
-                    }
-                })
-                .catch(error => console.error('Error saving calibration factors:', error));
-        }
-
-        function fetchUsbDevices() {
-            fetch('/api/settings/usb_devices')
-                .then(response => response.json())
-                .then(devices => {
-                    const valveDevSelect = document.getElementById('valve-relay-device');
+    function populateUsbDevices(currentDevice) {
+        fetch('/api/settings/usb_devices')
+            .then(response => response.json())
+            .then(devices => {
+                const valveDevSelect = document.getElementById('valve-relay-device');
+                if (valveDevSelect) {
                     valveDevSelect.innerHTML = '<option value="">Select a device</option>';
                     devices.forEach(dev => {
                         const option = document.createElement('option');
                         option.value = dev.device;
                         option.textContent = dev.device;
+                        if (option.value === currentDevice) {
+                            option.selected = true;
+                        }
                         valveDevSelect.appendChild(option);
                     });
-                })
-                .catch(error => console.error('Error fetching USB devices:', error));
+                }
+            })
+            .catch(error => console.error('Error fetching USB devices:', error));
+    }
+
+    function addAdditionalPlant() {
+        const newIp = document.getElementById('new-plant-ip')?.value.trim();
+        if (!newIp) {
+            alert('Please enter a valid IP or DNS.');
+            return;
         }
 
-        function saveUsbAssignment(role, device) {
-            fetch("/api/settings/assign_usb", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role, device })
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ additional_plants: [newIp] })  // Send as array to append
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('new-plant-ip').value = '';
+                    loadSettings();
+                } else {
+                    alert('Failed to add plant: ' + data.error);
+                }
             })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        alert(`${role} assigned successfully.`);
-                    } else {
-                        alert(`Failed to assign ${role}: ${data.error}`);
-                    }
-                })
-                .catch(error => console.error(`Error assigning ${role}:`, error));
+            .catch(error => console.error('Error adding plant:', error));
+    }
+
+    function removePlant(index) {
+        fetch('/api/settings/remove_plant', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ index: index })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    loadSettings();
+                } else {
+                    alert('Failed to remove plant: ' + data.error);
+                }
+            })
+            .catch(error => console.error('Error removing plant:', error));
+    }
+
+    function saveCalibrationFactors() {
+        const fresh = parseFloat(document.getElementById('fresh-cal')?.value);
+        const feed = parseFloat(document.getElementById('feed-cal')?.value);
+        const drain = parseFloat(document.getElementById('drain-cal')?.value);
+
+        if (isNaN(fresh) || isNaN(feed) || isNaN(drain)) {
+            alert('Please enter valid numbers for all calibration factors.');
+            return;
         }
-    </script>
+
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ calibration_factors: { fresh, feed, drain } })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Calibration factors saved successfully.');
+                    loadSettings();  // Reload to confirm
+                } else {
+                    alert('Failed to save calibration factors: ' + data.error);
+                }
+            })
+            .catch(error => console.error('Error saving calibration factors:', error));
+    }
+
+    function saveUsbAssignment(role, device) {
+        fetch("/api/settings/assign_usb", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role, device })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert(`${role} assigned successfully.`);
+                    loadSettings();  // Refresh after save
+                } else {
+                    alert(`Failed to assign ${role}: ${data.error}`);
+                }
+            })
+            .catch(error => console.error(`Error assigning ${role}:`, error));
+    }
+</script>
 </head>
 <body>
     <nav>
@@ -210,7 +269,7 @@
                 </select>
                 <button type="submit">Save Valve Relay Module</button>
             </form>
-            <button onclick="fetchUsbDevices()">Rescan USB Devices</button>
+            <button onclick="loadSettings()">Rescan USB Devices</button>
         </div>
 
         <!-- Valve Relay Port Assignments -->
