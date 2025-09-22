@@ -4,9 +4,6 @@ import os
 from datetime import datetime
 import threading
 import time
-from api.fresh_flow import get_latest_flow_rate as get_fresh_flow_rate, get_total_volume as get_fresh_total_volume
-from api.feed_flow import get_latest_flow_rate as get_feed_flow_rate, get_total_volume as get_feed_total_volume
-from api.drain_flow import get_latest_flow_rate as get_drain_flow_rate, get_total_volume as get_drain_total_volume
 
 # Define the log directory and file
 LOG_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'logs')
@@ -52,6 +49,9 @@ def log_sensor_reading(sensor_name, value, additional_data=None):
 
 def log_flow_periodically():
     while True:
+        from api.fresh_flow import get_latest_flow_rate as get_fresh_flow_rate, get_total_volume as get_fresh_total_volume
+        from api.feed_flow import get_latest_flow_rate as get_feed_flow_rate, get_total_volume as get_feed_total_volume
+        from api.drain_flow import get_latest_flow_rate as get_drain_flow_rate, get_total_volume as get_drain_total_volume
         fresh_flow = get_fresh_flow_rate()
         fresh_total = get_fresh_total_volume()
         feed_flow = get_feed_flow_rate()

@@ -3,7 +3,6 @@ import time
 from threading import Lock
 from api.debug import debug_states  # Import for conditional debug
 from flask import Blueprint, jsonify
-from services.log_service import log_reset_event
 
 fresh_flow_blueprint = Blueprint('fresh_flow', __name__)
 
@@ -78,6 +77,7 @@ def set_calibration_factor(value):
 
 @fresh_flow_blueprint.route('/reset', methods=['POST'])
 def reset():
+    from services.log_service import log_reset_event
     previous_total = reset_total()
     log_reset_event('fresh_flow', previous_total)
     return jsonify({"status": "success"})
