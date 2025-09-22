@@ -16,13 +16,13 @@ from api.drain_flow import drain_flow_blueprint
 from api.settings import settings_blueprint, load_settings
 from api.debug import debug_blueprint, debug_states
 from api.logs import log_blueprint
-from api.dosing_relay import dosing_relay_blueprint
+from api.valve_relay import valve_relay_blueprint
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
 from services.feed_flow_service import get_latest_flow_rate as get_latest_feed_flow_rate, get_total_volume as get_feed_total_volume, reset_total as reset_feed_total, flow_reader as feed_flow_reader
 from services.drain_flow_service import get_latest_flow_rate as get_latest_drain_flow_rate, get_total_volume as get_drain_total_volume, reset_total as reset_drain_total, flow_reader as drain_flow_reader
-from services.dosing_relay_service import reinitialize_relay_service
+from services.valve_relay_service import reinitialize_relay_service
 
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
@@ -42,7 +42,7 @@ app.register_blueprint(drain_flow_blueprint, url_prefix='/api/drain_flow')
 app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
 app.register_blueprint(debug_blueprint, url_prefix='/debug')
 app.register_blueprint(log_blueprint, url_prefix='/api/logs')
-app.register_blueprint(dosing_relay_blueprint, url_prefix='/api/dosing_relay')
+app.register_blueprint(valve_relay_blueprint, url_prefix='/api/valve_relay')
 
 # Shared state for remote plants
 plant_data = {}  # { 'plant_ip': {...} }

@@ -1,4 +1,4 @@
-# services/dosing_relay_service.py
+# services/valve_relay_service.py
 
 import serial
 import json
@@ -25,9 +25,9 @@ SETTINGS_FILE = os.path.join(os.getcwd(), "data", "settings.json")
 
 def get_relay_device_path():
     settings = load_settings()
-    relay_device = settings.get("usb_roles", {}).get("dosing_relay")
+    relay_device = settings.get("usb_roles", {}).get("valve_relay")
     if not relay_device:
-        raise RuntimeError("No dosing relay device configured in settings.")
+        raise RuntimeError("No valve relay device configured in settings.")
     return relay_device
 
 def get_relay_port(relay_name):
@@ -42,9 +42,9 @@ def reinitialize_relay_service():
             # Turn off both relays for a quick test
             ser.write(RELAY_OFF_COMMANDS[1])
             ser.write(RELAY_OFF_COMMANDS[2])
-        print("Dosing Relay service reinitialized successfully.")
+        print("Valve Relay service reinitialized successfully.")
     except Exception as e:
-        print(f"Error reinitializing dosing relay service: {e}")
+        print(f"Error reinitializing Valve relay service: {e}")
 
 def turn_on_relay(relay_id):
     try:
@@ -54,13 +54,13 @@ def turn_on_relay(relay_id):
 
         old_state = relay_status[relay_id]
         relay_status[relay_id] = "on"
-        print(f"Dosing Relay {relay_id} turned ON.")
+        print(f"Valve Relay {relay_id} turned ON.")
 
         if old_state != "on":
             from status_namespace import emit_status_update
             emit_status_update()
     except Exception as e:
-        print(f"Error turning on dosing relay {relay_id}: {e}")
+        print(f"Error turning on valve relay {relay_id}: {e}")
 
 def turn_off_relay(relay_id):
     try:
@@ -70,13 +70,13 @@ def turn_off_relay(relay_id):
 
         old_state = relay_status[relay_id]
         relay_status[relay_id] = "off"
-        print(f"Dosing Relay {relay_id} turned OFF.")
+        print(f"Valve Relay {relay_id} turned OFF.")
 
         if old_state != "off":
             from status_namespace import emit_status_update
             emit_status_update()
     except Exception as e:
-        print(f"Error turning off dosing relay {relay_id}: {e}")
+        print(f"Error turning off valve relay {relay_id}: {e}")
 
 def get_relay_status(relay_id):
     return relay_status.get(relay_id, "unknown")
