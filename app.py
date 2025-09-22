@@ -14,6 +14,7 @@ from api.fresh_flow import fresh_flow_blueprint
 from api.feed_flow import feed_flow_blueprint
 from api.drain_flow import drain_flow_blueprint
 from api.settings import settings_blueprint, load_settings
+from api.debug import debug_blueprint
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
@@ -36,6 +37,7 @@ app.register_blueprint(fresh_flow_blueprint, url_prefix='/api/fresh_flow')
 app.register_blueprint(feed_flow_blueprint, url_prefix='/api/feed_flow')
 app.register_blueprint(drain_flow_blueprint, url_prefix='/api/drain_flow')
 app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
+app.register_blueprint(debug_blueprint, url_prefix='/debug')
 
 # Shared state for remote plants
 plant_data = {}  # { 'plant_ip': {...} }
@@ -198,6 +200,10 @@ def index():
 @app.route('/settings')
 def settings():
     return render_template('settings.html')
+
+@app.route('/debug')
+def debug_page():
+    return render_template('debug.html')
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=8000, debug=True)

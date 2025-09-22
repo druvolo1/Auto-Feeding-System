@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Debug - Flow Meter Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="manifest" href="/static/manifest.json">
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            fetch('/debug/states')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('fresh-flow-debug').checked = data.fresh_flow;
+                    document.getElementById('feed-flow-debug').checked = data.feed_flow;
+                    document.getElementById('drain-flow-debug').checked = data.drain_flow;
+                    document.getElementById('socket-connections-debug').checked = data.socket_connections;
+                    document.getElementById('plants-debug').checked = data.plants;
+                })
+                .catch(error => console.error('Error loading debug states:', error));
+        });
+
+        function toggleDebug(component) {
+            const checkbox = document.getElementById(`${component}-debug`);
+            fetch('/debug/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ component: component, enabled: checkbox.checked })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        console.error('Failed to toggle debug:', data.error);
+                        checkbox.checked = !checkbox.checked; // Revert on failure
+                    }
+                })
+                .catch(error => {
+                    console.error('Error toggling debug:', error);
+                    checkbox.checked = !checkbox.checked; // Revert on error
+                });
+        }
+    </script>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/settings">Settings</a></li>
+            <li><a href="/debug" class="active">Debug</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1>Debug Controls</h1>
+        <p class="subtitle">Toggle debug logs for different system components.</p>
+
+        <div class="data-container">
+            <div class="checkbox-container">
+                <label>Fresh Flow</label>
+                <input type="checkbox" id="fresh-flow-debug" onchange="toggleDebug('fresh_flow')">
+            </div>
+
+            <div class="checkbox-container">
+                <label>Feed Flow</label>
+                <input type="checkbox" id="feed-flow-debug" onchange="toggleDebug('feed_flow')">
+            </div>
+
+            <div class="checkbox-container">
+                <label>Drain Flow</label>
+                <input type="checkbox" id="drain-flow-debug" onchange="toggleDebug('drain_flow')">
+            </div>
+
+            <div class="checkbox-container">
+                <label>Socket Connections</label>
+                <input type="checkbox" id="socket-connections-debug" onchange="toggleDebug('socket_connections')">
+            </div>
+
+            <div class="checkbox-container">
+                <label>Plants</label>
+                <input type="checkbox" id="plants-debug" onchange="toggleDebug('plants')">
+            </div>
+        </div>
+    </main>
+</body>
+</html>
