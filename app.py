@@ -52,10 +52,10 @@ def connect_to_remote_plant(plant):
     try:
         # Resolve name to IP to debug resolution
         ip = socket.gethostbyname(plant)
-        if debug_states.get('socket_connections', False):
+        if debug_states.get('socket-connections', False):
             print(f"[DEBUG] Resolved {plant} to IP: {ip}")
     except socket.gaierror as e:
-        if debug_states.get('socket_connections', False):
+        if debug_states.get('socket-connections', False):
             print(f"[ERROR] Name resolution failed for {plant}: {e}")
         return
 
@@ -64,12 +64,12 @@ def connect_to_remote_plant(plant):
 
     @sio.event(namespace='/status')
     def connect():
-        if debug_states.get('socket_connections', False):
+        if debug_states.get('socket-connections', False):
             print(f"[INFO] Connected to remote plant: {plant}")
 
     @sio.event(namespace='/status')
     def disconnect():
-        if debug_states.get('socket_connections', False):
+        if debug_states.get('socket-connections', False):
             print(f"[INFO] Disconnected from remote plant: {plant}")
         with plant_lock:
             if plant in plant_data:
@@ -89,10 +89,10 @@ def connect_to_remote_plant(plant):
 
     try:
         sio.connect(f'http://{plant}:8000', namespaces=['/status'])
-        if debug_states.get('socket_connections', False):
+        if debug_states.get('socket-connections', False):
             print(f"[DEBUG] Connect attempt to {plant} initiated")
     except Exception as e:
-        if debug_states.get('socket_connections', False):
+        if debug_states.get('socket-connections', False):
             print(f"[ERROR] Failed to connect to {plant}: {e}")
 
 def reload_plants():
@@ -179,7 +179,7 @@ def broadcast_flow_rates():
 
             if data != last_emitted:
                 last_emitted = data
-                if debug_states.get('socket_connections', False):
+                if debug_states.get('socket-connections', False):
                     print(f"[DEBUG] Emitting flow_update: {data}")
                 socketio.emit('flow_update', data, namespace='/status')
             eventlet.sleep(1)

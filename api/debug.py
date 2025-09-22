@@ -4,12 +4,12 @@ import os
 
 debug_blueprint = Blueprint('debug', __name__)
 
-# Global debug states
+# Global debug states with hyphen keys
 debug_states = {
-    'fresh_flow': False,
-    'feed_flow': False,
-    'drain_flow': False,
-    'socket_connections': False,
+    'fresh-flow': False,
+    'feed-flow': False,
+    'drain-flow': False,
+    'socket-connections': False,
     'plants': False
 }
 

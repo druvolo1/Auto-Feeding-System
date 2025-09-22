@@ -14,7 +14,7 @@ def flow_reader():
     try:
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(FLOW_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        if debug_states.get('feed_flow', False):
+        if debug_states.get('feed-flow', False):
             print("[DEBUG] Feed GPIO setup complete on pin 23. Starting polling loop...")
     except Exception as e:
         print(f"[ERROR] Feed GPIO setup failed: {e}")
@@ -30,13 +30,13 @@ def flow_reader():
                 current_state = GPIO.input(FLOW_PIN)
                 if current_state == 1 and last_state == 0:
                     pulse_count += 1
-                    if debug_states.get('feed_flow', False):
+                    if debug_states.get('feed-flow', False):
                         print(f"[DEBUG] Feed pulse detected! Total in this second: {pulse_count}")
                 last_state = current_state
                 time.sleep(0.001)
 
             flow_rate = pulse_count / CALIBRATION_FACTOR
-            if debug_states.get('feed_flow', False):
+            if debug_states.get('feed-flow', False):
                 print(f"[DEBUG] Feed pulses in last second: {pulse_count}, Calculated flow: {flow_rate} gal/min")
 
             with flow_lock:
@@ -58,5 +58,5 @@ def reset_total():
     with flow_lock:
         global total_volume
         total_volume = 0.0
-        if debug_states.get('feed_flow', False):
+        if debug_states.get('feed-flow', False):
             print("[DEBUG] Total volume reset to 0.0 gallons")

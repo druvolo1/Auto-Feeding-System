@@ -12,16 +12,16 @@
                 .then(response => response.json())
                 .then(data => {
                     const freshFlowCheckbox = document.getElementById('fresh-flow-debug');
-                    if (freshFlowCheckbox) freshFlowCheckbox.checked = data.fresh_flow;
+                    if (freshFlowCheckbox) freshFlowCheckbox.checked = data['fresh-flow'];
 
                     const feedFlowCheckbox = document.getElementById('feed-flow-debug');
-                    if (feedFlowCheckbox) feedFlowCheckbox.checked = data.feed_flow;
+                    if (feedFlowCheckbox) feedFlowCheckbox.checked = data['feed-flow'];
 
                     const drainFlowCheckbox = document.getElementById('drain-flow-debug');
-                    if (drainFlowCheckbox) drainFlowCheckbox.checked = data.drain_flow;
+                    if (drainFlowCheckbox) drainFlowCheckbox.checked = data['drain-flow'];
 
                     const socketConnectionsCheckbox = document.getElementById('socket-connections-debug');
-                    if (socketConnectionsCheckbox) socketConnectionsCheckbox.checked = data.socket_connections;
+                    if (socketConnectionsCheckbox) socketConnectionsCheckbox.checked = data['socket-connections'];
 
                     const plantsCheckbox = document.getElementById('plants-debug');
                     if (plantsCheckbox) plantsCheckbox.checked = data.plants;
@@ -70,22 +70,22 @@
         <div class="data-container">
             <div class="checkbox-container">
                 <label>Fresh Flow</label>
-                <input type="checkbox" id="fresh-flow-debug" onchange="toggleDebug('fresh_flow')">
+                <input type="checkbox" id="fresh-flow-debug" onchange="toggleDebug('fresh-flow')">
             </div>
 
             <div class="checkbox-container">
                 <label>Feed Flow</label>
-                <input type="checkbox" id="feed-flow-debug" onchange="toggleDebug('feed_flow')">
+                <input type="checkbox" id="feed-flow-debug" onchange="toggleDebug('feed-flow')">
             </div>
 
             <div class="checkbox-container">
                 <label>Drain Flow</label>
-                <input type="checkbox" id="drain-flow-debug" onchange="toggleDebug('drain_flow')">
+                <input type="checkbox" id="drain-flow-debug" onchange="toggleDebug('drain-flow')">
             </div>
 
             <div class="checkbox-container">
                 <label>Socket Connections</label>
-                <input type="checkbox" id="socket-connections-debug" onchange="toggleDebug('socket_connections')">
+                <input type="checkbox" id="socket-connections-debug" onchange="toggleDebug('socket-connections')">
             </div>
 
             <div class="checkbox-container">
