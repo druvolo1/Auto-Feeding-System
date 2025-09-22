@@ -22,7 +22,7 @@ from api.valve_relay import valve_relay_blueprint
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
 from services.feed_flow_service import get_latest_flow_rate as get_latest_feed_flow_rate, get_total_volume as get_feed_total_volume, reset_total as reset_feed_total, flow_reader as feed_flow_reader
 from services.drain_flow_service import get_latest_flow_rate as get_latest_drain_flow_rate, get_total_volume as get_drain_total_volume, reset_total as reset_drain_total, flow_reader as drain_flow_reader
-from services.valve_relay_service import reinitialize_relay_service
+from services.valve_relay_service import reinitialize_relay_service, get_relay_status
 
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
@@ -158,11 +158,12 @@ def broadcast_plants_status():
                 print(f"[ERROR] Plants broadcast error: {e}")
 
 # Background tasks
-def broadcast_flow_rates():
+def broadcast_local_status():
     last_emitted = {
         'fresh_flow': None, 'fresh_total_volume': None,
         'feed_flow': None, 'feed_total_volume': None,
-        'drain_flow': None, 'drain_total_volume': None
+        'drain_flow': None, 'drain_total_volume': None,
+        'relay1_status': None, 'relay2_status': None
     }
     while True:
         try:
@@ -172,6 +173,8 @@ def broadcast_flow_rates():
             feed_total_volume = get_feed_total_volume()
             drain_flow_rate = get_latest_drain_flow_rate()
             drain_total_volume = get_drain_total_volume()
+            relay1_status = get_relay_status(1)
+            relay2_status = get_relay_status(2)
 
             data = {
                 'fresh_flow': round(fresh_flow_rate, 2) if fresh_flow_rate is not None else None,
@@ -179,14 +182,16 @@ def broadcast_flow_rates():
                 'feed_flow': round(feed_flow_rate, 2) if feed_flow_rate is not None else None,
                 'feed_total_volume': round(feed_total_volume, 2) if feed_total_volume is not None else None,
                 'drain_flow': round(drain_flow_rate, 2) if drain_flow_rate is not None else None,
-                'drain_total_volume': round(drain_total_volume, 2) if drain_total_volume is not None else None
+                'drain_total_volume': round(drain_total_volume, 2) if drain_total_volume is not None else None,
+                'relay1_status': relay1_status,
+                'relay2_status': relay2_status
             }
 
             if data != last_emitted:
                 last_emitted = data
                 if debug_states.get('socket-connections', False):
-                    print(f"[DEBUG] Emitting flow_update: {data}")
-                socketio.emit('flow_update', data, namespace='/status')
+                    print(f"[DEBUG] Emitting local_status_update: {data}")
+                socketio.emit('local_status_update', data, namespace='/status')
             eventlet.sleep(1)
         except Exception as e:
             print(f"[ERROR] Broadcast error: {e}")
@@ -200,7 +205,7 @@ def start_threads():
         print("[INIT] Starting drain flow reader thread...")
         eventlet.spawn(drain_flow_reader)
         print("[INIT] Starting broadcast thread...")
-        eventlet.spawn(broadcast_flow_rates)
+        eventlet.spawn(broadcast_local_status)
         print("[INIT] Starting plants monitor thread...")
         eventlet.spawn(monitor_remote_plants)
         print("[INIT] Starting plants status broadcast thread...")
