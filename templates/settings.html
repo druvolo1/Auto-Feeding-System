@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Settings - Flow Meter Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="manifest" href="/static/manifest.json">
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
+        });
+
+        function loadSettings() {
+            fetch('/api/settings')
+                .then(response => response.json())
+                .then(data => {
+                    const plantsList = document.getElementById('additional-plants-list');
+                    plantsList.innerHTML = '';
+                    data.additional_plants.forEach((plant, index) => {
+                        const div = document.createElement('div');
+                        div.className = 'valve-rename-cell';
+                        div.innerHTML = `
+                            <input type="text" value="${plant}" disabled>
+                            <button class="small-btn secondary-btn" onclick="removePlant(${index})">Remove</button>
+                        `;
+                        plantsList.appendChild(div);
+                    });
+                })
+                .catch(error => console.error('Error loading settings:', error));
+        }
+
+        function addAdditionalPlant() {
+            const newIp = document.getElementById('new-plant-ip').value.trim();
+            if (!newIp) {
+                alert('Please enter a valid IP or DNS.');
+                return;
+            }
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ additional_plants: [newIp] })  // Send as array to append
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('new-plant-ip').value = '';
+                        loadSettings();
+                    } else {
+                        alert('Failed to add plant: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error adding plant:', error));
+        }
+
+        function removePlant(index) {
+            fetch('/api/settings/remove_plant', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index: index })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        loadSettings();
+                    } else {
+                        alert('Failed to remove plant: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error removing plant:', error));
+        }
+    </script>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="#">Dosage</a></li>
+            <li><a href="/settings" class="active">Settings</a></li>
+            <li><a href="#">Logs</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1>Settings</h1>
+        <p class="subtitle">Configure your flow meter monitor.</p>
+
+        <div class="data-container">
+            <h3>Additional Plants</h3>
+            <div id="additional-plants-list">
+                <!-- Populated by JS -->
+            </div>
+            <p>New IP / DNS:</p>
+            <div class="valve-rename-cell">
+                <input type="text" id="new-plant-ip" placeholder="e.g., 192.168.1.100 or plant2.local">
+                <button class="small-btn" onclick="addAdditionalPlant()">+ Add</button>
+            </div>
+        </div>
+
+        <!-- Add more sections as needed for other settings -->
+
+    </main>
+</body>
+</html>
