@@ -52,9 +52,10 @@ def turn_on_relay(relay_id):
         relay_status[relay_id] = "on"
         print(f"Valve Relay {relay_id} turned ON.")
 
-        if old_state != "on":
-            from status_namespace import emit_status_update
-            emit_status_update()
+        # Removed to fix import error:
+        # if old_state != "on":
+        #     from status_namespace import emit_status_update
+        #     emit_status_update()
     except Exception as e:
         print(f"Error turning on valve relay {relay_id}: {e}")
 
@@ -68,9 +69,10 @@ def turn_off_relay(relay_id):
         relay_status[relay_id] = "off"
         print(f"Valve Relay {relay_id} turned OFF.")
 
-        if old_state != "off":
-            from status_namespace import emit_status_update
-            emit_status_update()
+        # Removed to fix import error:
+        # if old_state != "off":
+        #     from status_namespace import emit_status_update
+        #     emit_status_update()
     except Exception as e:
         print(f"Error turning off valve relay {relay_id}: {e}")
 
