@@ -71,7 +71,7 @@ def list_usb_devices():
 
 @settings_blueprint.route('/assign_usb', methods=['POST'])
 def assign_usb_device():
-    data = request.get_json()
+    data = request.get_json() or {}
     role = data.get("role")
     device = data.get("device")
 
@@ -79,7 +79,7 @@ def assign_usb_device():
         return jsonify({"status": "failure", "error": "Invalid role"}), 400
 
     settings = load_settings()
-    settings["usb_roles"][role] = device
+    settings.setdefault("usb_roles", {})[role] = device  # Safely create dict if missing
     save_settings(settings)
 
     # Reinitialize the valve relay service if device changed
