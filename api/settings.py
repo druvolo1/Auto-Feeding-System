@@ -1,6 +1,9 @@
 from flask import Blueprint, jsonify, request
 import json
 import os
+import api.fresh_flow
+import api.feed_flow
+import api.drain_flow
 
 settings_blueprint = Blueprint('settings', __name__)
 
@@ -11,7 +14,12 @@ if not os.path.exists(SETTINGS_FILE):
     os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
     with open(SETTINGS_FILE, "w") as f:
         json.dump({
-            "additional_plants": []
+            "additional_plants": [],
+            "calibration_factors": {
+                "fresh": 28.390575,
+                "feed": 28.390575,
+                "drain": 28.390575
+            }
             # Add other default settings as needed
         }, f, indent=4)
 
@@ -39,7 +47,12 @@ def update_settings():
     if plants_changed:
         settings['additional_plants'] = settings.get('additional_plants', []) + data['additional_plants']
 
-    # Handle other settings updates as needed
+    if 'calibration_factors' in data:
+        settings['calibration_factors'] = data['calibration_factors']
+        # Update running calibration factors in sensor modules
+        api.fresh_flow.set_calibration_factor(settings['calibration_factors']['fresh'])
+        api.feed_flow.set_calibration_factor(settings['calibration_factors']['feed'])
+        api.drain_flow.set_calibration_factor(settings['calibration_factors']['drain'])
 
     save_settings(settings)
     
@@ -66,7 +79,7 @@ def remove_plant():
         reload_event.set()  # Trigger reload
         return jsonify({"status": "success", "settings": settings})
     else:
-        return jsonify({"status": "failure", "error": "Invalid index"}), 400
+        return jupytext({"status": "failure", "error": "Invalid index"}), 400
 
 @settings_blueprint.route('/settings')
 def settings_page():
