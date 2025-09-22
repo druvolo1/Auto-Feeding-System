@@ -4,7 +4,7 @@ from threading import Lock
 from api.debug import debug_states  # Import for conditional debug
 
 FLOW_PIN = 24  # BCM pin for drain flow (assuming a different pin)
-CALIBRATION_FACTOR = 28.390575  # Pulses per gallon (same as fresh)
+CALIBRATION_FACTOR = 28.390575  # Pulses per gallon (default)
 
 latest_flow = None
 total_volume = 0.0  # Accumulated total in gallons
@@ -60,3 +60,12 @@ def reset_total():
         total_volume = 0.0
         if debug_states.get('drain-flow', False):
             print("[DEBUG] Total volume reset to 0.0 gallons")
+
+def get_calibration_factor():
+    return CALIBRATION_FACTOR
+
+def set_calibration_factor(value):
+    global CALIBRATION_FACTOR
+    CALIBRATION_FACTOR = float(value)
+    if debug_states.get('drain-flow', False):
+        print(f"[DEBUG] Drain calibration factor updated to {CALIBRATION_FACTOR}")

@@ -6,6 +6,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <link rel="manifest" href="/static/manifest.json">
+    <style>
+        .calibration-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .calibration-row label {
+            width: 120px;
+            margin-right: 10px;
+        }
+        .calibration-row input {
+            flex: 1;
+        }
+    </style>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
@@ -26,6 +40,11 @@
                         `;
                         plantsList.appendChild(div);
                     });
+
+                    data.calibration_factors = data.calibration_factors || {};
+                    document.getElementById('fresh-cal').value = data.calibration_factors.fresh || 28.390575;
+                    document.getElementById('feed-cal').value = data.calibration_factors.feed || 28.390575;
+                    document.getElementById('drain-cal').value = data.calibration_factors.drain || 28.390575;
                 })
                 .catch(error => console.error('Error loading settings:', error));
         }
@@ -70,6 +89,33 @@
                 })
                 .catch(error => console.error('Error removing plant:', error));
         }
+
+        function saveCalibrationFactors() {
+            const fresh = parseFloat(document.getElementById('fresh-cal').value);
+            const feed = parseFloat(document.getElementById('feed-cal').value);
+            const drain = parseFloat(document.getElementById('drain-cal').value);
+
+            if (isNaN(fresh) || isNaN(feed) || isNaN(drain)) {
+                alert('Please enter valid numbers for all calibration factors.');
+                return;
+            }
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ calibration_factors: { fresh, feed, drain } })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Calibration factors saved successfully.');
+                        loadSettings();  // Reload to confirm
+                    } else {
+                        alert('Failed to save calibration factors: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error saving calibration factors:', error));
+        }
     </script>
 </head>
 <body>
@@ -95,6 +141,23 @@
                 <input type="text" id="new-plant-ip" placeholder="e.g., 192.168.1.100 or plant2.local">
                 <button class="small-btn" onclick="addAdditionalPlant()">+ Add</button>
             </div>
+        </div>
+
+        <div class="data-container">
+            <h3>Calibration Factors (pulses per gallon)</h3>
+            <div class="calibration-row">
+                <label>Fresh Water:</label>
+                <input type="number" id="fresh-cal" step="0.001">
+            </div>
+            <div class="calibration-row">
+                <label>Feed Water:</label>
+                <input type="number" id="feed-cal" step="0.001">
+            </div>
+            <div class="calibration-row">
+                <label>Drain:</label>
+                <input type="number" id="drain-cal" step="0.001">
+            </div>
+            <button class="small-btn" onclick="saveCalibrationFactors()">Save Calibration Factors</button>
         </div>
 
         <!-- Add more sections as needed for other settings -->
