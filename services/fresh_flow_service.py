@@ -6,6 +6,7 @@ FLOW_PIN = 18  # BCM pin for fresh flow
 CALIBRATION_FACTOR = 7.5
 
 latest_flow = None
+total_volume = 0.0  # NEW: Accumulated total in liters
 flow_lock = Lock()
 
 def flow_reader():
@@ -35,11 +36,22 @@ def flow_reader():
             print(f"[DEBUG] Fresh pulses in last second: {pulse_count}, Calculated flow: {flow_rate} L/min")
 
             with flow_lock:
-                global latest_flow
+                global latest_flow, total_volume
                 latest_flow = flow_rate
+                total_volume += flow_rate / 60  # NEW: Accumulate (L/min / 60 = liters this second)
         except Exception as e:
             print(f"[ERROR] Fresh flow reader loop error: {e}")
 
 def get_latest_flow_rate():
     with flow_lock:
         return latest_flow
+
+def get_total_volume():
+    with flow_lock:
+        return total_volume
+
+def reset_total():
+    with flow_lock:
+        global total_volume
+        total_volume = 0.0
+        print("[DEBUG] Total volume reset to 0.0 liters")

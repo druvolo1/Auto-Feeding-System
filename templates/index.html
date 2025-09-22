@@ -7,12 +7,27 @@
     <script>
         const socket = io.connect('http://' + document.domain + ':' + location.port + '/status');
         socket.on('flow_update', function(data) {
-            document.getElementById('flow-rate').innerText = data.flow + ' L/min';
+            document.getElementById('flow-rate').innerText = (data.flow !== null ? data.flow + ' L/min' : 'Loading...');
+            document.getElementById('total-volume').innerText = (data.total_volume !== null ? data.total_volume + ' L' : 'Loading...');
         });
+
+        function resetTotal() {
+            fetch('/api/fresh_flow/reset', { method: 'POST' })
+                .then(response => {
+                    if (response.ok) {
+                        console.log('Total volume reset successfully');
+                    } else {
+                        console.error('Failed to reset total volume');
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
     </script>
 </head>
 <body>
     <h1>Flow Meter Reading</h1>
     <p>Current Flow Rate: <span id="flow-rate">Loading...</span></p>
+    <p>Total Volume: <span id="total-volume">Loading...</span></p>
+    <button onclick="resetTotal()">Reset Total Volume</button>
 </body>
 </html>

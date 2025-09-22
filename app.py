@@ -9,7 +9,7 @@ from flask_cors import CORS
 from api.fresh_flow import fresh_flow_blueprint
 
 # Services
-from services.fresh_flow_service import get_latest_flow_rate, flow_reader
+from services.fresh_flow_service import get_latest_flow_rate, get_total_volume, reset_total, flow_reader
 
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
@@ -27,16 +27,21 @@ app.register_blueprint(fresh_flow_blueprint, url_prefix='/api/fresh_flow')
 
 # Background tasks
 def broadcast_flow_rates():
-    last_emitted_value = None
+    last_emitted = {'flow': None, 'total_volume': None}
     while True:
         try:
             flow_rate = get_latest_flow_rate()
-            if flow_rate is not None:
-                flow_rate = round(flow_rate, 2)
-                if flow_rate != last_emitted_value:
-                    last_emitted_value = flow_rate
-                    print(f"[DEBUG] Emitting flow_update: {flow_rate} L/min")
-                    socketio.emit('flow_update', {'flow': flow_rate}, namespace='/status')
+            total_volume = get_total_volume()
+
+            data = {
+                'flow': round(flow_rate, 2) if flow_rate is not None else None,
+                'total_volume': round(total_volume, 2) if total_volume is not None else None
+            }
+
+            if data != last_emitted:
+                last_emitted = data
+                print(f"[DEBUG] Emitting flow_update: {data}")
+                socketio.emit('flow_update', data, namespace='/status')
             eventlet.sleep(1)
         except Exception as e:
             print(f"[ERROR] Broadcast error: {e}")
