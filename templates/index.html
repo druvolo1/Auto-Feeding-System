@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flow Meter Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
+    <script>
+        const socket = io.connect('http://' + document.domain + ':' + location.port + '/status');
+        socket.on('flow_update', function(data) {
+            document.getElementById('flow-rate').innerText = data.flow + ' L/min';
+        });
+    </script>
+</head>
+<body>
+    <h1>Flow Meter Reading</h1>
+    <p>Current Flow Rate: <span id="flow-rate">Loading...</span></p>
+</body>
+</html>
