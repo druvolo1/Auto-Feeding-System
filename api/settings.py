@@ -19,6 +19,13 @@ if not os.path.exists(SETTINGS_FILE):
                 "fresh": 28.390575,
                 "feed": 28.390575,
                 "drain": 28.390575
+            },
+            "usb_roles": {
+                "dosing_relay": None
+            },
+            "relay_ports": {
+                "feed_water": 1,
+                "fresh_water": 2
             }
             # Add other default settings as needed
         }, f, indent=4)
@@ -54,6 +61,9 @@ def update_settings():
         api.feed_flow.set_calibration_factor(settings['calibration_factors']['feed'])
         api.drain_flow.set_calibration_factor(settings['calibration_factors']['drain'])
 
+    if 'relay_ports' in data:
+        settings['relay_ports'] = data['relay_ports']
+
     save_settings(settings)
     
     if plants_changed:
@@ -79,7 +89,37 @@ def remove_plant():
         reload_event.set()  # Trigger reload
         return jsonify({"status": "success", "settings": settings})
     else:
-        return jupytext({"status": "failure", "error": "Invalid index"}), 400
+        return jsonify({"status": "failure", "error": "Invalid index"}), 400
+
+@settings_blueprint.route('/usb_devices', methods=['GET'])
+def list_usb_devices():
+    import subprocess
+    devices = []
+    try:
+        result = subprocess.check_output("ls /dev/serial/by-path", shell=True).decode().splitlines()
+        devices = [{"device": f"/dev/serial/by-path/{dev}"} for dev in result]
+    except Exception as e:
+        print(f"Error listing USB devices: {e}")
+    return jsonify(devices)
+
+@settings_blueprint.route('/assign_usb', methods=['POST'])
+def assign_usb_device():
+    data = request.get_json()
+    role = data.get("role")
+    device = data.get("device")
+
+    if role != "dosing_relay":
+        return jsonify({"status": "failure", "error": "Invalid role"}), 400
+
+    settings = load_settings()
+    settings["usb_roles"][role] = device
+    save_settings(settings)
+
+    # Reinitialize the dosing relay service if device changed
+    from services.dosing_relay_service import reinitialize_relay_service
+    reinitialize_relay_service()
+
+    return jsonify({"status": "success", "usb_roles": settings["usb_roles"]})
 
 @settings_blueprint.route('/settings')
 def settings_page():
