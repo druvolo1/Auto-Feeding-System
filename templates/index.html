@@ -7,17 +7,45 @@
     <script>
         const socket = io.connect('http://' + document.domain + ':' + location.port + '/status');
         socket.on('flow_update', function(data) {
-            document.getElementById('flow-rate').innerText = (data.flow !== null ? data.flow + ' Gal/min' : 'Loading...');
-            document.getElementById('total-volume').innerText = (data.total_volume !== null ? data.total_volume + ' Gal' : 'Loading...');
+            document.getElementById('fresh-flow-rate').innerText = (data.fresh_flow !== null ? data.fresh_flow + ' Gal/min' : 'Loading...');
+            document.getElementById('fresh-total-volume').innerText = (data.fresh_total_volume !== null ? data.fresh_total_volume + ' Gal' : 'Loading...');
+            document.getElementById('feed-flow-rate').innerText = (data.feed_flow !== null ? data.feed_flow + ' Gal/min' : 'Loading...');
+            document.getElementById('feed-total-volume').innerText = (data.feed_total_volume !== null ? data.feed_total_volume + ' Gal' : 'Loading...');
+            document.getElementById('drain-flow-rate').innerText = (data.drain_flow !== null ? data.drain_flow + ' Gal/min' : 'Loading...');
+            document.getElementById('drain-total-volume').innerText = (data.drain_total_volume !== null ? data.drain_total_volume + ' Gal' : 'Loading...');
         });
 
-        function resetTotal() {
+        function resetFreshTotal() {
             fetch('/api/fresh_flow/reset', { method: 'POST' })
                 .then(response => {
                     if (response.ok) {
-                        console.log('Total volume reset successfully');
+                        console.log('Fresh total volume reset successfully');
                     } else {
-                        console.error('Failed to reset total volume');
+                        console.error('Failed to reset fresh total volume');
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function resetFeedTotal() {
+            fetch('/api/feed_flow/reset', { method: 'POST' })
+                .then(response => {
+                    if (response.ok) {
+                        console.log('Feed total volume reset successfully');
+                    } else {
+                        console.error('Failed to reset feed total volume');
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function resetDrainTotal() {
+            fetch('/api/drain_flow/reset', { method: 'POST' })
+                .then(response => {
+                    if (response.ok) {
+                        console.log('Drain total volume reset successfully');
+                    } else {
+                        console.error('Failed to reset drain total volume');
                     }
                 })
                 .catch(error => console.error('Error:', error));
@@ -25,9 +53,21 @@
     </script>
 </head>
 <body>
-    <h1>Fresh Water Flow Meter Reading</h1>
-    <p>Current Flow Rate: <span id="flow-rate">Loading...</span></p>
-    <p>Total Volume: <span id="total-volume">Loading...</span></p>
-    <button onclick="resetTotal()">Reset Total Volume</button>
+    <h1>Flow Meter Monitor</h1>
+    
+    <h2>Fresh Water</h2>
+    <p>Current Flow Rate: <span id="fresh-flow-rate">Loading...</span></p>
+    <p>Total Volume: <span id="fresh-total-volume">Loading...</span></p>
+    <button onclick="resetFreshTotal()">Reset Fresh Total Volume</button>
+    
+    <h2>Feed Water</h2>
+    <p>Current Flow Rate: <span id="feed-flow-rate">Loading...</span></p>
+    <p>Total Volume: <span id="feed-total-volume">Loading...</span></p>
+    <button onclick="resetFeedTotal()">Reset Feed Total Volume</button>
+    
+    <h2>Drain</h2>
+    <p>Current Flow Rate: <span id="drain-flow-rate">Loading...</span></p>
+    <p>Total Volume: <span id="drain-total-volume">Loading...</span></p>
+    <button onclick="resetDrainTotal()">Reset Drain Total Volume</button>
 </body>
 </html>
