@@ -22,6 +22,20 @@
         .relay-port-select {
             width: 100px;
         }
+        .relay-sections {
+            display: flex;
+            justify-content: space-between;
+        }
+        .relay-assignments {
+            width: 60%;
+        }
+        .relay-testing {
+            width: 35%;
+        }
+        .relay-button.active {
+            background-color: green;
+            color: white;
+        }
     </style>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -107,6 +121,9 @@
                 // Load and populate USB devices with pre-selection
                 data.usb_roles = data.usb_roles || {};
                 populateUsbDevices(data.usb_roles.valve_relay);
+
+                // Load relay statuses
+                loadRelayStatuses();
             })
             .catch(error => console.error('Error loading settings:', error));
     }
@@ -226,9 +243,9 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    alert(`Relay ${relayId} turned ON.`);
+                    updateRelayButton(relayId, 'on');
                 } else {
-                    alert(`Failed to turn on relay ${relayId}: ${data.error}`);
+                    console.error(`Failed to turn on relay ${relayId}: ${data.error}`);
                 }
             })
             .catch(error => console.error(`Error turning on relay ${relayId}:`, error));
@@ -242,12 +259,37 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    alert(`Relay ${relayId} turned OFF.`);
+                    updateRelayButton(relayId, 'off');
                 } else {
-                    alert(`Failed to turn off relay ${relayId}: ${data.error}`);
+                    console.error(`Failed to turn off relay ${relayId}: ${data.error}`);
                 }
             })
             .catch(error => console.error(`Error turning off relay ${relayId}:`, error));
+    }
+
+    function loadRelayStatuses() {
+        [1, 2].forEach(relayId => {
+            fetch(`/api/valve_relay/${relayId}/status`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateRelayButton(relayId, data.relay_status);
+                    }
+                })
+                .catch(error => console.error(`Error fetching status for relay ${relayId}:`, error));
+        });
+    }
+
+    function updateRelayButton(relayId, status) {
+        const onButton = document.getElementById(`relay-${relayId}-on`);
+        const offButton = document.getElementById(`relay-${relayId}-off`);
+        if (status === 'on') {
+            onButton.classList.add('active');
+            offButton.classList.remove('active');
+        } else {
+            onButton.classList.remove('active');
+            offButton.classList.add('active');
+        }
     }
 </script>
 </head>
@@ -302,43 +344,45 @@
                 <select id="valve-relay-device" name="valve-relay-device">
                     <option value="">Select a device</option>
                 </select>
+                <br><br>
                 <button type="submit">Save Valve Relay Module</button>
             </form>
+            <br>
             <button onclick="loadSettings()">Rescan USB Devices</button>
         </div>
 
-        <!-- Valve Relay Port Assignments -->
-        <div class="data-container">
-            <h3>Valve Relay Port Assignments</h3>
-            <form id="relay-port-form">
-                <label for="feed-water-relay-port">Feed Water Relay Port:</label>
-                <select id="feed-water-relay-port" class="relay-port-select">
-                    <option value="1">Relay 1</option>
-                    <option value="2">Relay 2</option>
-                </select>
-                <br><br>
-                <label for="fresh-water-relay-port">Fresh Water Relay Port:</label>
-                <select id="fresh-water-relay-port" class="relay-port-select">
-                    <option value="1">Relay 1</option>
-                    <option value="2">Relay 2</option>
-                </select>
-                <br><br>
-                <button type="submit">Save Relay Port Assignments</button>
-            </form>
-        </div>
-
-        <!-- Relay Testing -->
-        <div class="data-container">
-            <h3>Relay Testing</h3>
-            <div>
-                <p>Relay 1:</p>
-                <button class="small-btn" onclick="turnOnRelay(1)">On</button>
-                <button class="small-btn" onclick="turnOffRelay(1)">Off</button>
+        <!-- Relay Sections Side by Side -->
+        <div class="relay-sections">
+            <!-- Valve Relay Port Assignments -->
+            <div class="relay-assignments data-container">
+                <h3>Valve Relay Port Assignments</h3>
+                <form id="relay-port-form">
+                    <label for="feed-water-relay-port">Feed Water Relay Port:</label>
+                    <select id="feed-water-relay-port" class="relay-port-select">
+                        <option value="1">Relay 1</option>
+                        <option value="2">Relay 2</option>
+                    </select>
+                    <br><br>
+                    <label for="fresh-water-relay-port">Fresh Water Relay Port:</label>
+                    <select id="fresh-water-relay-port" class="relay-port-select">
+                        <option value="1">Relay 1</option>
+                        <option value="2">Relay 2</option>
+                    </select>
+                    <br><br>
+                    <button type="submit">Save Relay Port Assignments</button>
+                </form>
             </div>
-            <div>
+
+            <!-- Relay Testing -->
+            <div class="relay-testing data-container">
+                <h3>Relay Testing</h3>
+                <p>Relay 1:</p>
+                <button id="relay-1-on" class="small-btn relay-button" onclick="turnOnRelay(1)">On</button>
+                <button id="relay-1-off" class="small-btn relay-button" onclick="turnOffRelay(1)">Off</button>
+                <br><br>
                 <p>Relay 2:</p>
-                <button class="small-btn" onclick="turnOnRelay(2)">On</button>
-                <button class="small-btn" onclick="turnOffRelay(2)">Off</button>
+                <button id="relay-2-on" class="small-btn relay-button" onclick="turnOnRelay(2)">On</button>
+                <button id="relay-2-off" class="small-btn relay-button" onclick="turnOffRelay(2)">Off</button>
             </div>
         </div>
 
