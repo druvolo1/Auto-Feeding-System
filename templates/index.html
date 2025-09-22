@@ -27,10 +27,53 @@
         #plants-table tr:hover {
             background-color: #333;
         }
+        #plants-table.disconnected tr {
+            background-color: #ffcccc; /* light red */
+        }
+        #plants-table.disconnected tr:nth-child(even) {
+            background-color: #ffaaaa; /* darker red for even rows */
+        }
+        #connection-status {
+            color: orange; /* Default connecting color */
+        }
+        #connection-status.connected {
+            color: green;
+        }
+        #connection-status.disconnected {
+            color: red;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
     <script>
-        const socket = io.connect('http://' + document.domain + ':' + location.port + '/status');
+        const socket = io.connect('http://' + document.domain + ':' + location.port + '/status', { transports: ['websocket'] });
+
+        // Connection status handling
+        const statusElement = document.getElementById('connection-status');
+        const plantsTable = document.getElementById('plants-table');
+
+        socket.on('connect', function() {
+            statusElement.innerText = 'Connected';
+            statusElement.classList.add('connected');
+            statusElement.classList.remove('disconnected');
+            plantsTable.classList.remove('disconnected');
+            console.log('Connected via', socket.io.engine.transport.name);
+        });
+
+        socket.on('connect_error', function(err) {
+            statusElement.innerText = 'Connection failed: ' + err.message;
+            statusElement.classList.add('disconnected');
+            statusElement.classList.remove('connected');
+            plantsTable.classList.add('disconnected');
+            console.error('Connection error:', err);
+        });
+
+        socket.on('disconnect', function() {
+            statusElement.innerText = 'Disconnected';
+            statusElement.classList.add('disconnected');
+            statusElement.classList.remove('connected');
+            plantsTable.classList.add('disconnected');
+            console.log('Disconnected');
+        });
 
         socket.on('flow_update', function(data) {
             document.getElementById('fresh-flow-rate').innerText = (data.fresh_flow !== null ? data.fresh_flow + ' Gal/min' : 'Loading...');
@@ -44,68 +87,92 @@
             document.getElementById('last-updated').innerText = `Last updated: ${now.toLocaleString()}`;
         });
 
+        let headersSet = false; // Flag to track if headers are initialized
+
         socket.on('plants_update', function(data) {
-            const plantsTable = document.getElementById('plants-table').getElementsByTagName('tbody')[0];
-            plantsTable.innerHTML = ''; // Clear existing rows
+            const plantsTableBody = document.getElementById('plants-table').getElementsByTagName('tbody')[0];
+            const thead = document.getElementById('plants-table').getElementsByTagName('thead')[0];
+            plantsTableBody.innerHTML = ''; // Clear existing rows
 
             if (data.plants.length === 0) {
                 return;
             }
 
-            // Dynamically determine sensor columns based on the first plant's water_level keys
+            // Dynamically determine sensor columns (only if not set)
             const firstPlantWaterLevels = data.plants[0].water_level || {};
             const sensorKeys = Object.keys(firstPlantWaterLevels);
             const sensorHeaders = sensorKeys.map(key => firstPlantWaterLevels[key].label);
 
-            // Update table headers if needed (but since it's static, assume consistent across plants)
-            const thead = document.getElementById('plants-table').getElementsByTagName('thead')[0];
-            thead.innerHTML = `
-                <tr>
-                    <th>System Name</th>
-                    <th>Plant Name</th>
-                    <th>Start Date</th>
-                    <th>Current pH</th>
-                    <th>Feeding in Progress</th>
-                    <th>Allow Remote Feeding</th>
-                    <th>Heartbeat</th>
-                    ${sensorHeaders.map(label => `<th>${label}</th>`).join('')}
-                    <th>Fill Valve</th>
-                    <th>Drain Valve</th>
-                </tr>
-            `;
+            if (!headersSet) {
+                thead.innerHTML = `
+                    <tr>
+                        <th>System Name</th>
+                        <th>Plant Name</th>
+                        <th>Start Date</th>
+                        <th>Current pH</th>
+                        <th>Feeding in Progress</th>
+                        <th>Allow Remote Feeding</th>
+                        <th>Heartbeat</th>
+                        ${sensorHeaders.map(label => `<th>${label}</th>`).join('')}
+                        <th>Fill Valve</th>
+                        <th>Drain Valve</th>
+                    </tr>
+                `;
+                headersSet = true;
+            }
 
+            // Build rows in a fragment to batch DOM insertion
+            const fragment = document.createDocumentFragment();
             data.plants.forEach(plant => {
-                const row = plantsTable.insertRow();
-                row.insertCell().innerText = plant.system_name || 'Unknown';
-                row.insertCell().innerText = plant.plant_name || 'N/A';
-                row.insertCell().innerText = plant.start_date || 'N/A';
-                row.insertCell().innerText = plant.current_ph !== null ? plant.current_ph : 'N/A';
-                row.insertCell().innerText = plant.feeding_in_progress ? 'Yes' : 'No';
-                row.insertCell().innerText = plant.settings.allow_remote_feeding ? 'Yes' : 'No';  // Assuming boolean, adjust if needed
-                row.insertCell().innerText = plant.last_update ? new Date(plant.last_update).toLocaleString() : 'Never';
+                const row = document.createElement('tr');
 
-                // Add water level columns (flipped logic: triggered means Present)
+                // Add cells (use createElement for efficiency)
+                const cells = [
+                    plant.system_name || 'Unknown',
+                    plant.plant_name || 'N/A',
+                    plant.start_date || 'N/A',
+                    plant.current_ph !== null ? plant.current_ph : 'N/A',
+                    plant.feeding_in_progress ? 'Yes' : 'No',
+                    plant.settings.allow_remote_feeding ? 'Yes' : 'No',
+                    plant.last_update ? new Date(plant.last_update).toLocaleString() : 'Never'
+                ];
+                cells.forEach(text => {
+                    const td = document.createElement('td');
+                    td.innerText = text;
+                    row.appendChild(td);
+                });
+
+                // Water level sensors
                 sensorKeys.forEach(key => {
                     const sensor = plant.water_level?.[key] || {triggered: false};
                     const status = sensor.triggered ? 'Not Present' : 'Present';
-                    row.insertCell().innerText = status;
+                    const td = document.createElement('td');
+                    td.innerText = status;
+                    row.appendChild(td);
                 });
 
-                // Add fill and drain valve statuses
+                // Valve statuses
                 const fillLabel = plant.valve_info?.fill_valve_label || "";
                 const drainLabel = plant.valve_info?.drain_valve_label || "";
                 const fillStatus = (plant.valve_info?.valve_relays?.[fillLabel]?.status || "N/A").toUpperCase();
                 const drainStatus = (plant.valve_info?.valve_relays?.[drainLabel]?.status || "N/A").toUpperCase();
-                row.insertCell().innerText = fillStatus;
-                row.insertCell().innerText = drainStatus;
+                [fillStatus, drainStatus].forEach(text => {
+                    const td = document.createElement('td');
+                    td.innerText = text;
+                    row.appendChild(td);
+                });
 
-                // Hidden valve info (per row, if needed)
+                // Hidden valve info
                 const hiddenDiv = document.createElement('div');
                 hiddenDiv.style.display = 'none';
                 hiddenDiv.id = `valve-info-${plant.ip || 'local'}`;
                 hiddenDiv.innerText = `Fill IP: ${plant.valve_info?.fill_valve_ip || ''}, Fill Valve: ${plant.valve_info?.fill_valve || ''}, Drain IP: ${plant.valve_info?.drain_valve_ip || ''}, Drain Valve: ${plant.valve_info?.drain_valve || ''}`;
                 row.appendChild(hiddenDiv);
+
+                fragment.appendChild(row);
             });
+
+            plantsTableBody.appendChild(fragment); // Single DOM append
         });
 
         function resetFreshTotal() {
@@ -192,6 +259,7 @@
         </table>
 
         <p id="last-updated" class="last-updated">Last updated: Never</p>
+        <p id="connection-status">Connecting...</p>
     </main>
 </body>
 </html>
