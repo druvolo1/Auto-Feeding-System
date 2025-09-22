@@ -2,6 +2,9 @@ import RPi.GPIO as GPIO
 import time
 from threading import Lock
 from api.debug import debug_states  # Import for conditional debug
+from flask import Blueprint, jsonify
+
+feed_flow_blueprint = Blueprint('feed_flow', __name__)
 
 FLOW_PIN = 23  # BCM pin for feed flow (assuming a different pin)
 CALIBRATION_FACTOR = 28.390575  # Pulses per gallon (default)
@@ -69,3 +72,8 @@ def set_calibration_factor(value):
     CALIBRATION_FACTOR = float(value)
     if debug_states.get('feed-flow', False):
         print(f"[DEBUG] Feed calibration factor updated to {CALIBRATION_FACTOR}")
+
+@feed_flow_blueprint.route('/reset', methods=['POST'])
+def reset():
+    reset_total()
+    return jsonify({"status": "success"})
