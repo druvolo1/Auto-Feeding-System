@@ -127,13 +127,13 @@
             fetch('/api/settings/usb_devices')
                 .then(response => response.json())
                 .then(devices => {
-                    const dosingDevSelect = document.getElementById('dosing-relay-device');
-                    dosingDevSelect.innerHTML = '<option value="">Select a device</option>';
+                    const valveDevSelect = document.getElementById('valve-relay-device');
+                    valveDevSelect.innerHTML = '<option value="">Select a device</option>';
                     devices.forEach(dev => {
                         const option = document.createElement('option');
                         option.value = dev.device;
                         option.textContent = dev.device;
-                        dosingDevSelect.appendChild(option);
+                        valveDevSelect.appendChild(option);
                     });
                 })
                 .catch(error => console.error('Error fetching USB devices:', error));
@@ -200,22 +200,22 @@
             <button class="small-btn" onclick="saveCalibrationFactors()">Save Calibration Factors</button>
         </div>
 
-        <!-- Dosing Relay Module Form -->
+        <!-- Valve Relay Module Form -->
         <div class="data-container">
-            <h3>Dosing Relay Module</h3>
-            <form id="dosing-relay-form">
-                <label for="dosing-relay-device">Dosing Relay Module:</label>
-                <select id="dosing-relay-device" name="dosing-relay-device">
+            <h3>Valve Relay Module</h3>
+            <form id="valve-relay-form">
+                <label for="valve-relay-device">Valve Relay Module:</label>
+                <select id="valve-relay-device" name="valve-relay-device">
                     <option value="">Select a device</option>
                 </select>
-                <button type="submit">Save Dosing Relay Module</button>
+                <button type="submit">Save Valve Relay Module</button>
             </form>
             <button onclick="fetchUsbDevices()">Rescan USB Devices</button>
         </div>
 
-        <!-- Dosing Relay Port Assignments -->
+        <!-- Valve Relay Port Assignments -->
         <div class="data-container">
-            <h3>Dosing Relay Port Assignments</h3>
+            <h3>Valve Relay Port Assignments</h3>
             <form id="relay-port-form">
                 <label for="feed-water-relay-port">Feed Water Relay Port:</label>
                 <select id="feed-water-relay-port">
