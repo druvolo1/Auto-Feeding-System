@@ -1,7 +1,6 @@
 from flask import Blueprint, jsonify, request
 import json
 import os
-from app import reload_event  # Import the event
 
 settings_blueprint = Blueprint('settings', __name__)
 
@@ -45,6 +44,7 @@ def update_settings():
     save_settings(settings)
     
     if plants_changed:
+        from app import reload_event
         print("[DEBUG] Triggered reload_event.set() for add")
         reload_event.set()  # Trigger reload
 
@@ -61,6 +61,7 @@ def remove_plant():
     if 'additional_plants' in settings and 0 <= index < len(settings['additional_plants']):
         del settings['additional_plants'][index]
         save_settings(settings)
+        from app import reload_event
         print("[DEBUG] Triggered reload_event.set() for remove")
         reload_event.set()  # Trigger reload
         return jsonify({"status": "success", "settings": settings})
