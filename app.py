@@ -5,13 +5,13 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO
 from flask_cors import CORS
 
-# Blueprints (add more as we build)
+# Blueprints
 from api.flow import flow_blueprint
 
 # Services
 from services.flow_service import get_latest_flow_rate, flow_reader
 
-# Status namespace (for SocketIO broadcasts)
+# Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
 
 app = Flask(__name__)
@@ -36,21 +36,25 @@ def broadcast_flow_rates():
                 if flow_rate != last_emitted_value:
                     last_emitted_value = flow_rate
                     socketio.emit('flow_update', {'flow': flow_rate})
-            eventlet.sleep(1)  # Update every second
+            eventlet.sleep(1)
         except Exception as e:
-            print(f"Error broadcasting flow: {e}")
+            print(f"[ERROR] Broadcast error: {e}")
 
 def start_threads():
-    # Start flow reader (GPIO pulse counter)
-    eventlet.spawn(flow_reader)
-    
-    # Start broadcaster
-    eventlet.spawn(broadcast_flow_rates)
+    try:
+        print("[INIT] Starting flow reader thread...")
+        eventlet.spawn(flow_reader)
+        print("[INIT] Starting broadcast thread...")
+        eventlet.spawn(broadcast_flow_rates)
+    except Exception as e:
+        print(f"[ERROR] Failed to start threads: {e}")
+
+# Call start_threads here (runs on module import for Gunicorn)
+start_threads()
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
 if __name__ == "__main__":
-    start_threads()
     socketio.run(app, host="0.0.0.0", port=8000, debug=True)
