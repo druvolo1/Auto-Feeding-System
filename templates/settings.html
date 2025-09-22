@@ -20,6 +20,60 @@
             flex: 1;
         }
     </style>
+    <body>
+    <h1>Settings</h1>
+
+    <!-- Section for Additional Plants -->
+    <section>
+        <h2>Additional Plants</h2>
+        <div id="additional-plants-list"></div>
+        <input type="text" id="new-plant-ip" placeholder="Enter IP or DNS">
+        <button onclick="addAdditionalPlant()">Add Plant</button>
+    </section>
+
+    <!-- Section for Calibration Factors -->
+    <section>
+        <h2>Calibration Factors</h2>
+        <div class="calibration-row">
+            <label for="fresh-cal">Fresh:</label>
+            <input type="number" id="fresh-cal" step="0.000001">
+        </div>
+        <div class="calibration-row">
+            <label for="feed-cal">Feed:</label>
+            <input type="number" id="feed-cal" step="0.000001">
+        </div>
+        <div class="calibration-row">
+            <label for="drain-cal">Drain:</label>
+            <input type="number" id="drain-cal" step="0.000001">
+        </div>
+        <button onclick="saveCalibrationFactors()">Save Calibration</button>
+    </section>
+
+    <!-- Section for Valve Relay Assignment -->
+    <section>
+        <h2>Assign Valve Relay</h2>
+        <form id="valve-relay-form">
+            <select id="valve-relay-device"></select>
+            <button type="submit">Assign</button>
+        </form>
+    </section>
+
+    <!-- Section for Relay Ports -->
+    <section>
+        <h2>Relay Ports</h2>
+        <form id="relay-port-form">
+            <label for="feed-water-relay-port">Feed Water Port:</label>
+            <input type="number" id="feed-water-relay-port" min="1" max="2">
+            <label for="fresh-water-relay-port">Fresh Water Port:</label>
+            <input type="number" id="fresh-water-relay-port" min="1" max="2">
+            <button type="submit">Save Ports</button>
+        </form>
+    </section>
+
+    <script>
+        // ... (keep all your existing JavaScript here)
+    </script>
+</body>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
