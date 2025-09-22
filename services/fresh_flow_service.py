@@ -4,10 +4,10 @@ from threading import Lock
 from api.debug import debug_states  # Import for conditional debug
 
 FLOW_PIN = 18  # BCM pin for fresh flow
-CALIBRATION_FACTOR = 28.390575  # Pulses per gallon (original 7.5 per liter * 3.78541 liters/gallon)
+CALIBRATION_FACTOR = 28.390575  # Pulses per gallon
 
 latest_flow = None
-total_volume = 0.0  # Accumulated total in gallons
+total_volume = 0.0
 flow_lock = Lock()
 
 def flow_reader():
@@ -42,7 +42,7 @@ def flow_reader():
             with flow_lock:
                 global latest_flow, total_volume
                 latest_flow = flow_rate
-                total_volume += flow_rate / 60  # Accumulate (gal/min / 60 = gallons this second)
+                total_volume += flow_rate / 60
         except Exception as e:
             print(f"[ERROR] Fresh flow reader loop error: {e}")
 

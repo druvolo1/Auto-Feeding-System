@@ -14,7 +14,7 @@ from api.fresh_flow import fresh_flow_blueprint
 from api.feed_flow import feed_flow_blueprint
 from api.drain_flow import drain_flow_blueprint
 from api.settings import settings_blueprint, load_settings
-from api.debug import debug_blueprint
+from api.debug import debug_blueprint, load_debug_states
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
@@ -23,9 +23,6 @@ from services.drain_flow_service import get_latest_flow_rate as get_latest_drain
 
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
-
-# Import debug_states for conditional prints
-from api.debug import debug_states
 
 app = Flask(__name__)
 CORS(app)
@@ -41,6 +38,9 @@ app.register_blueprint(feed_flow_blueprint, url_prefix='/api/feed_flow')
 app.register_blueprint(drain_flow_blueprint, url_prefix='/api/drain_flow')
 app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
 app.register_blueprint(debug_blueprint, url_prefix='/debug')
+
+# Load debug states on startup
+load_debug_states()
 
 # Shared state for remote plants
 plant_data = {}  # { 'plant_ip': {...} }
@@ -190,14 +190,11 @@ def broadcast_flow_rates():
 
 def start_threads():
     try:
-        if debug_states.get('fresh_flow', False):
-            print("[INIT] Starting fresh flow reader thread...")
+        print("[INIT] Starting fresh flow reader thread...")
         eventlet.spawn(fresh_flow_reader)
-        if debug_states.get('feed_flow', False):
-            print("[INIT] Starting feed flow reader thread...")
+        print("[INIT] Starting feed flow reader thread...")
         eventlet.spawn(feed_flow_reader)
-        if debug_states.get('drain_flow', False):
-            print("[INIT] Starting drain flow reader thread...")
+        print("[INIT] Starting drain flow reader thread...")
         eventlet.spawn(drain_flow_reader)
         print("[INIT] Starting broadcast thread...")
         eventlet.spawn(broadcast_flow_rates)
