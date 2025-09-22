@@ -184,7 +184,7 @@
                     plant.system_name || 'Unknown',
                     plant.plant_name || 'N/A',
                     plant.start_date || 'N/A',
-                    plant.system_volume || 'N/A',
+                    plant.settings.system_volume || 'N/A',
                     plant.current_ph !== null ? plant.current_ph : 'N/A',
                     plant.feeding_in_progress ? 'Yes' : 'No',
                     plant.settings.allow_remote_feeding ? 'Yes' : 'No',
