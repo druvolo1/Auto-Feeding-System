@@ -23,6 +23,46 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
+            document.getElementById('valve-relay-form').addEventListener('submit', e => {
+                e.preventDefault();
+                const dev = document.getElementById('valve-relay-device').value;
+                fetch("/api/settings/assign_usb", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role: 'valve_relay', device: dev })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('Valve relay assigned successfully.');
+                            loadSettings();
+                        } else {
+                            alert('Failed to assign valve relay: ' + data.error);
+                        }
+                    })
+                    .catch(error => console.error('Error assigning valve relay:', error));
+            });
+
+            document.getElementById('relay-port-form').addEventListener('submit', e => {
+                e.preventDefault();
+                const feedPort = parseInt(document.getElementById('feed-water-relay-port').value, 10);
+                const freshPort = parseInt(document.getElementById('fresh-water-relay-port').value, 10);
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ relay_ports: { feed_water: feedPort, fresh_water: freshPort } })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('Relay ports saved successfully.');
+                            loadSettings();
+                        } else {
+                            alert('Failed to save relay ports: ' + data.error);
+                        }
+                    })
+                    .catch(error => console.error('Error saving relay ports:', error));
+            });
         });
 
         function loadSettings() {
@@ -144,47 +184,6 @@
                 })
                 .catch(error => console.error('Error saving calibration factors:', error));
         }
-
-        document.getElementById('valve-relay-form').addEventListener('submit', e => {
-            e.preventDefault();
-            const dev = document.getElementById('valve-relay-device').value;
-            fetch("/api/settings/assign_usb", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role: 'valve_relay', device: dev })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        alert('Valve relay assigned successfully.');
-                        loadSettings();
-                    } else {
-                        alert('Failed to assign valve relay: ' + data.error);
-                    }
-                })
-                .catch(error => console.error('Error assigning valve relay:', error));
-        });
-
-        document.getElementById('relay-port-form').addEventListener('submit', e => {
-            e.preventDefault();
-            const feedPort = parseInt(document.getElementById('feed-water-relay-port').value, 10);
-            const freshPort = parseInt(document.getElementById('fresh-water-relay-port').value, 10);
-            fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ relay_ports: { feed_water: feedPort, fresh_water: freshPort } })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        alert('Relay ports saved successfully.');
-                        loadSettings();
-                    } else {
-                        alert('Failed to save relay ports: ' + data.error);
-                    }
-                })
-                .catch(error => console.error('Error saving relay ports:', error));
-        });
     </script>
 </body>
 </html>
