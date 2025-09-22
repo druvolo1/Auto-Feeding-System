@@ -20,103 +20,10 @@
             flex: 1;
         }
     </style>
-    <body>
-    <h1>Settings</h1>
-
-    <!-- Section for Additional Plants -->
-    <section>
-        <h2>Additional Plants</h2>
-        <div id="additional-plants-list"></div>
-        <input type="text" id="new-plant-ip" placeholder="Enter IP or DNS">
-        <button onclick="addAdditionalPlant()">Add Plant</button>
-    </section>
-
-    <!-- Section for Calibration Factors -->
-    <section>
-        <h2>Calibration Factors</h2>
-        <div class="calibration-row">
-            <label for="fresh-cal">Fresh:</label>
-            <input type="number" id="fresh-cal" step="0.000001">
-        </div>
-        <div class="calibration-row">
-            <label for="feed-cal">Feed:</label>
-            <input type="number" id="feed-cal" step="0.000001">
-        </div>
-        <div class="calibration-row">
-            <label for="drain-cal">Drain:</label>
-            <input type="number" id="drain-cal" step="0.000001">
-        </div>
-        <button onclick="saveCalibrationFactors()">Save Calibration</button>
-    </section>
-
-    <!-- Section for Valve Relay Assignment -->
-    <section>
-        <h2>Assign Valve Relay</h2>
-        <form id="valve-relay-form">
-            <select id="valve-relay-device"></select>
-            <button type="submit">Assign</button>
-        </form>
-    </section>
-
-    <!-- Section for Relay Ports -->
-    <section>
-        <h2>Relay Ports</h2>
-        <form id="relay-port-form">
-            <label for="feed-water-relay-port">Feed Water Port:</label>
-            <input type="number" id="feed-water-relay-port" min="1" max="2">
-            <label for="fresh-water-relay-port">Fresh Water Port:</label>
-            <input type="number" id="fresh-water-relay-port" min="1" max="2">
-            <button type="submit">Save Ports</button>
-        </form>
-    </section>
-
-    <script>
-        // ... (keep all your existing JavaScript here)
-    </script>
-</body>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
-            document.getElementById('valve-relay-form').addEventListener('submit', e => {
-                e.preventDefault();
-                const dev = document.getElementById('valve-relay-device').value;
-                fetch("/api/settings/assign_usb", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ role: 'valve_relay', device: dev })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Valve relay assigned successfully.');
-                            loadSettings();
-                        } else {
-                            alert('Failed to assign valve relay: ' + data.error);
-                        }
-                    })
-                    .catch(error => console.error('Error assigning valve relay:', error));
-            });
-
-            document.getElementById('relay-port-form').addEventListener('submit', e => {
-                e.preventDefault();
-                const feedPort = parseInt(document.getElementById('feed-water-relay-port').value, 10);
-                const freshPort = parseInt(document.getElementById('fresh-water-relay-port').value, 10);
-                fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ relay_ports: { feed_water: feedPort, fresh_water: freshPort } })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Relay ports saved successfully.');
-                            loadSettings();
-                        } else {
-                            alert('Failed to save relay ports: ' + data.error);
-                        }
-                    })
-                    .catch(error => console.error('Error saving relay ports:', error));
-            });
+            fetchUsbDevices(); // Add this to load USB devices
         });
 
         function loadSettings() {
@@ -144,31 +51,8 @@
                     const relayPorts = data.relay_ports || { feed_water: 1, fresh_water: 2 };
                     document.getElementById('feed-water-relay-port').value = relayPorts.feed_water;
                     document.getElementById('fresh-water-relay-port').value = relayPorts.fresh_water;
-
-                    // Load USB roles and populate select
-                    data.usb_roles = data.usb_roles || {};
-                    populateUsbSelect(data);
                 })
                 .catch(error => console.error('Error loading settings:', error));
-        }
-
-        function populateUsbSelect(settingsData) {
-            fetch('/api/settings/usb_devices')
-                .then(response => response.json())
-                .then(devices => {
-                    const valveDevSelect = document.getElementById('valve-relay-device');
-                    valveDevSelect.innerHTML = '<option value="">Select a device</option>';
-                    devices.forEach(dev => {
-                        const option = document.createElement('option');
-                        option.value = dev.device;
-                        option.textContent = dev.device;
-                        if (option.value === settingsData.usb_roles.valve_relay) {
-                            option.selected = true;
-                        }
-                        valveDevSelect.appendChild(option);
-                    });
-                })
-                .catch(error => console.error('Error fetching USB devices:', error));
         }
 
         function addAdditionalPlant() {
@@ -238,6 +122,119 @@
                 })
                 .catch(error => console.error('Error saving calibration factors:', error));
         }
+
+        function fetchUsbDevices() {
+            fetch('/api/settings/usb_devices')
+                .then(response => response.json())
+                .then(devices => {
+                    const dosingDevSelect = document.getElementById('dosing-relay-device');
+                    dosingDevSelect.innerHTML = '<option value="">Select a device</option>';
+                    devices.forEach(dev => {
+                        const option = document.createElement('option');
+                        option.value = dev.device;
+                        option.textContent = dev.device;
+                        dosingDevSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error fetching USB devices:', error));
+        }
+
+        function saveUsbAssignment(role, device) {
+            fetch("/api/settings/assign_usb", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role, device })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert(`${role} assigned successfully.`);
+                    } else {
+                        alert(`Failed to assign ${role}: ${data.error}`);
+                    }
+                })
+                .catch(error => console.error(`Error assigning ${role}:`, error));
+        }
     </script>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="/" class="active">Home</a></li>
+            <li><a href="/settings" class="active">Settings</a></li>
+            <li><a href="/debug" class="active">Debug</a></li>
+            <li><a href="/logs">Logs</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1>Settings</h1>
+        <p class="subtitle">Configure your flow meter monitor.</p>
+
+        <div class="data-container">
+            <h3>Plants to feed</h3>
+            <div id="additional-plants-list">
+                <!-- Populated by JS -->
+            </div>
+            <p>New IP / DNS:</p>
+            <div class="valve-rename-cell">
+                <input type="text" id="new-plant-ip" placeholder="e.g., 192.168.1.100 or plant2.local">
+                <button class="small-btn" onclick="addAdditionalPlant()">+ Add</button>
+            </div>
+        </div>
+
+        <div class="data-container">
+            <h3>Flow Meter Calibration (pulses per gallon)</h3>
+            <div class="calibration-row">
+                <label>Fresh Water:</label>
+                <input type="number" id="fresh-cal" step="0.001">
+            </div>
+            <div class="calibration-row">
+                <label>Feed Water:</label>
+                <input type="number" id="feed-cal" step="0.001">
+            </div>
+            <div class="calibration-row">
+                <label>Drain:</label>
+                <input type="number" id="drain-cal" step="0.001">
+            </div>
+            <button class="small-btn" onclick="saveCalibrationFactors()">Save Calibration Factors</button>
+        </div>
+
+        <!-- Dosing Relay Module Form -->
+        <div class="data-container">
+            <h3>Dosing Relay Module</h3>
+            <form id="dosing-relay-form">
+                <label for="dosing-relay-device">Dosing Relay Module:</label>
+                <select id="dosing-relay-device" name="dosing-relay-device">
+                    <option value="">Select a device</option>
+                </select>
+                <button type="submit">Save Dosing Relay Module</button>
+            </form>
+            <button onclick="fetchUsbDevices()">Rescan USB Devices</button>
+        </div>
+
+        <!-- Dosing Relay Port Assignments -->
+        <div class="data-container">
+            <h3>Dosing Relay Port Assignments</h3>
+            <form id="relay-port-form">
+                <label for="feed-water-relay-port">Feed Water Relay Port:</label>
+                <select id="feed-water-relay-port">
+                    <option value="1">Relay 1</option>
+                    <option value="2">Relay 2</option>
+                </select>
+                <br><br>
+                <label for="fresh-water-relay-port">Fresh Water Relay Port:</label>
+                <select id="fresh-water-relay-port">
+                    <option value="1">Relay 1</option>
+                    <option value="2">Relay 2</option>
+                </select>
+                <br><br>
+                <button type="submit">Save Relay Port Assignments</button>
+            </form>
+        </div>
+
+        <!-- Add more sections as needed for other settings -->
+
+    </main>
 </body>
 </html>
