@@ -3,7 +3,7 @@
 import serial
 import json
 import os
-from utils.settings_utils import load_settings
+from api.settings import load_settings
 
 # USB Relay Commands
 RELAY_ON_COMMANDS = {
