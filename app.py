@@ -9,6 +9,7 @@ from flask_cors import CORS
 from api.fresh_flow import fresh_flow_blueprint
 from api.feed_flow import feed_flow_blueprint
 from api.drain_flow import drain_flow_blueprint
+from settings import settings_blueprint
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
@@ -30,6 +31,7 @@ socketio.on_namespace(StatusNamespace('/status'))
 app.register_blueprint(fresh_flow_blueprint, url_prefix='/api/fresh_flow')
 app.register_blueprint(feed_flow_blueprint, url_prefix='/api/feed_flow')
 app.register_blueprint(drain_flow_blueprint, url_prefix='/api/drain_flow')
+app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
 
 # Background tasks
 def broadcast_flow_rates():
@@ -83,6 +85,10 @@ start_threads()
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/settings')
+def settings():
+    return render_template('settings.html')
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=8000, debug=True)
