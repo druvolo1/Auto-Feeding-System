@@ -14,7 +14,7 @@ from api.fresh_flow import fresh_flow_blueprint
 from api.feed_flow import feed_flow_blueprint
 from api.drain_flow import drain_flow_blueprint
 from api.settings import settings_blueprint, load_settings
-from api.debug import debug_blueprint, load_debug_states
+from api.debug import debug_blueprint, debug_states
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
@@ -38,9 +38,6 @@ app.register_blueprint(feed_flow_blueprint, url_prefix='/api/feed_flow')
 app.register_blueprint(drain_flow_blueprint, url_prefix='/api/drain_flow')
 app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
 app.register_blueprint(debug_blueprint, url_prefix='/debug')
-
-# Load debug states on startup
-load_debug_states()
 
 # Shared state for remote plants
 plant_data = {}  # { 'plant_ip': {...} }
@@ -152,7 +149,8 @@ def broadcast_plants_status():
             
             eventlet.sleep(5)  # Broadcast every 5 seconds
         except Exception as e:
-            print(f"[ERROR] Plants broadcast error: {e}")
+            if debug_states.get('plants', False):
+                print(f"[ERROR] Plants broadcast error: {e}")
 
 # Background tasks
 def broadcast_flow_rates():
