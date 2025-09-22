@@ -60,8 +60,8 @@ def get_total_volume():
 
 def reset_total():
     with flow_lock:
-        previous_total = total_volume
         global total_volume
+        previous_total = total_volume
         total_volume = 0.0
         if debug_states.get('fresh-flow', False):
             print("[DEBUG] Total volume reset to 0.0 gallons")
