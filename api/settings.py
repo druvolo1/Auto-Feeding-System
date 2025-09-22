@@ -4,6 +4,7 @@ import os
 import api.fresh_flow
 import api.feed_flow
 import api.drain_flow
+from services.valve_relay_service import reinitialize_relay_service
 
 settings_blueprint = Blueprint('settings', __name__)
 
@@ -21,7 +22,7 @@ if not os.path.exists(SETTINGS_FILE):
                 "drain": 28.390575
             },
             "usb_roles": {
-                "dosing_relay": None
+                "valve_relay": None
             },
             "relay_ports": {
                 "feed_water": 1,
@@ -108,15 +109,14 @@ def assign_usb_device():
     role = data.get("role")
     device = data.get("device")
 
-    if role != "dosing_relay":
+    if role != "valve_relay":
         return jsonify({"status": "failure", "error": "Invalid role"}), 400
 
     settings = load_settings()
     settings["usb_roles"][role] = device
     save_settings(settings)
 
-    # Reinitialize the dosing relay service if device changed
-    from services.dosing_relay_service import reinitialize_relay_service
+    # Reinitialize the valve relay service if device changed
     reinitialize_relay_service()
 
     return jsonify({"status": "success", "usb_roles": settings["usb_roles"]})
