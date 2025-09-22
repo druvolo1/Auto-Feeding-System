@@ -31,6 +31,9 @@ def update_settings():
     if 'relay_ports' in data:
         settings['relay_ports'] = data['relay_ports']
 
+    if 'nutrient_concentration' in data:
+        settings['nutrient_concentration'] = data['nutrient_concentration']
+
     save_settings(settings)
     
     if plants_changed:

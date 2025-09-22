@@ -118,6 +118,10 @@
                 const freshPortEl = document.getElementById('fresh-water-relay-port');
                 if (freshPortEl) freshPortEl.value = relayPorts.fresh_water;
 
+                // Load nutrient concentration
+                const nutrientConcEl = document.getElementById('nutrient-conc');
+                if (nutrientConcEl) nutrientConcEl.value = data.nutrient_concentration || 1;
+
                 // Load and populate USB devices with pre-selection
                 data.usb_roles = data.usb_roles || {};
                 populateUsbDevices(data.usb_roles.valve_relay);
@@ -215,6 +219,31 @@
                 }
             })
             .catch(error => console.error('Error saving calibration factors:', error));
+    }
+
+    function saveNutrientConcentration() {
+        const concentration = parseFloat(document.getElementById('nutrient-conc')?.value);
+
+        if (isNaN(concentration)) {
+            alert('Please enter a valid number for nutrient concentration.');
+            return;
+        }
+
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nutrient_concentration: concentration })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Nutrient concentration saved successfully.');
+                    loadSettings();  // Reload to confirm
+                } else {
+                    alert('Failed to save nutrient concentration: ' + data.error);
+                }
+            })
+            .catch(error => console.error('Error saving nutrient concentration:', error));
     }
 
     function saveUsbAssignment(role, device) {
@@ -334,6 +363,15 @@
                 <input type="number" id="drain-cal" step="0.001">
             </div>
             <button class="small-btn" onclick="saveCalibrationFactors()">Save Calibration Factors</button>
+        </div>
+
+        <div class="data-container">
+            <h3>Nutrient Concentration</h3>
+            <div class="calibration-row">
+                <label>Concentration:</label>
+                <input type="number" id="nutrient-conc" step="0.1" value="1">
+            </div>
+            <button class="small-btn" onclick="saveNutrientConcentration()">Save Nutrient Concentration</button>
         </div>
 
         <!-- Valve Relay Module Form -->
