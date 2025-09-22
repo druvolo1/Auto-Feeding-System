@@ -3,6 +3,7 @@ import time
 from threading import Lock
 from api.debug import debug_states  # Import for conditional debug
 from flask import Blueprint, jsonify
+from services.log_service import log_reset_event
 
 fresh_flow_blueprint = Blueprint('fresh_flow', __name__)
 
@@ -59,10 +60,12 @@ def get_total_volume():
 
 def reset_total():
     with flow_lock:
+        previous_total = total_volume
         global total_volume
         total_volume = 0.0
         if debug_states.get('fresh-flow', False):
             print("[DEBUG] Total volume reset to 0.0 gallons")
+        return previous_total
 
 def get_calibration_factor():
     return CALIBRATION_FACTOR
@@ -75,5 +78,6 @@ def set_calibration_factor(value):
 
 @fresh_flow_blueprint.route('/reset', methods=['POST'])
 def reset():
-    reset_total()
+    previous_total = reset_total()
+    log_reset_event('fresh_flow', previous_total)
     return jsonify({"status": "success"})

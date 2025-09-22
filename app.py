@@ -15,6 +15,7 @@ from api.feed_flow import feed_flow_blueprint
 from api.drain_flow import drain_flow_blueprint
 from api.settings import settings_blueprint, load_settings
 from api.debug import debug_blueprint, debug_states
+from api.logs import log_blueprint
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
@@ -38,6 +39,7 @@ app.register_blueprint(feed_flow_blueprint, url_prefix='/api/feed_flow')
 app.register_blueprint(drain_flow_blueprint, url_prefix='/api/drain_flow')
 app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
 app.register_blueprint(debug_blueprint, url_prefix='/debug')
+app.register_blueprint(log_blueprint, url_prefix='/api/logs')
 
 # Shared state for remote plants
 plant_data = {}  # { 'plant_ip': {...} }
@@ -206,6 +208,8 @@ def start_threads():
 # Call start_threads here (runs on module import for Gunicorn)
 start_threads()
 
+import services.log_service
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -217,6 +221,10 @@ def settings():
 @app.route('/debug')
 def debug_page():
     return render_template('debug.html')
+
+@app.route('/logs')
+def logs_page():
+    return render_template('logs.html')
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=8000, debug=True)
