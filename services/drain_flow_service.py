@@ -3,11 +3,11 @@ import time
 from threading import Lock
 from api.debug import debug_states  # Import for conditional debug
 
-FLOW_PIN = 24  # BCM pin for drain flow
-CALIBRATION_FACTOR = 28.390575  # Pulses per gallon
+FLOW_PIN = 24  # BCM pin for drain flow (assuming a different pin)
+CALIBRATION_FACTOR = 28.390575  # Pulses per gallon (same as fresh)
 
 latest_flow = None
-total_volume = 0.0
+total_volume = 0.0  # Accumulated total in gallons
 flow_lock = Lock()
 
 def flow_reader():
@@ -42,7 +42,7 @@ def flow_reader():
             with flow_lock:
                 global latest_flow, total_volume
                 latest_flow = flow_rate
-                total_volume += flow_rate / 60
+                total_volume += flow_rate / 60  # Accumulate (gal/min / 60 = gallons this second)
         except Exception as e:
             print(f"[ERROR] Drain flow reader loop error: {e}")
 
