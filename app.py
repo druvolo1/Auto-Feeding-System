@@ -4,7 +4,7 @@ eventlet.monkey_patch()
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 from flask_cors import CORS
-import socketio  # For client connections
+import socketio as sio_module  # Renamed to avoid conflict
 from threading import Lock
 import time
 
@@ -45,7 +45,7 @@ def connect_to_remote_plant(plant):
     if plant in plant_clients:
         return  # Already connected
 
-    sio = socketio.Client()
+    sio = sio_module.Client()
     plant_clients[plant] = sio
 
     @sio.event
@@ -61,6 +61,7 @@ def connect_to_remote_plant(plant):
 
     @sio.on('status_update')
     def handle_status_update(data):
+        print(f"[DEBUG] Received status_update from {plant}: {data}")  # Added debug print
         with plant_lock:
             data['last_update'] = time.time() * 1000  # Milliseconds for JS
             data['ip'] = plant  # For identification
@@ -110,7 +111,7 @@ def broadcast_plants_status():
                 
                 if current_data != last_emitted:
                     last_emitted = current_data
-                    print(f"[DEBUG] Emitting plants_update: {len(current_data['plants'])} plants")
+                    print(f"[DEBUG] Emitting plants_update: {len(current_data['plants'])} plants - Data: {current_data}")
                     socketio.emit('plants_update', current_data, namespace='/status')
             
             eventlet.sleep(5)  # Broadcast every 5 seconds
