@@ -10,54 +10,28 @@ log_blueprint = Blueprint('logs', __name__)
 
 # Path to the logs directory (updated for consistency with multi-file support)
 LOG_DIR = os.path.join(os.getcwd(), "data", "logs")
-# Example single-file path (kept for backward compatibility if needed, but now we support multiple files)
-LOGS_FILE = os.path.join(LOG_DIR, "sensor_log.jsonl")
 
 # Ensure the logs directory exists
 os.makedirs(LOG_DIR, exist_ok=True)
 
-# Ensure an example logs file exists (empty if not) – optional, as we now list all files
-if not os.path.exists(LOGS_FILE):
-    open(LOGS_FILE, "w").close()
 
-
-# Helper function: Load logs from JSONL file, filtering for dosing events (kept for / endpoint)
-def load_logs():
-    logs = []
-    if os.path.exists(LOGS_FILE):
-        with open(LOGS_FILE, "r") as f:
-            for line in f:
-                if line.strip():
-                    try:
-                        entry = json.loads(line)
-                        if entry.get("event_type") == "dosing":  # Filter to dosing only for this API
-                            logs.append(entry)
-                    except json.JSONDecodeError:
-                        pass  # Skip malformed lines
-    return logs
-
-
-# API Endpoint: Get all dosing logs (from the primary JSONL file – kept for compatibility)
-@log_blueprint.route('/', methods=['GET'])
-def get_logs():
-    """
-    Retrieve all dosage logs (filtered from the primary JSONL file).
-    """
-    logs = load_logs()
-    return jsonify(logs)
-
-
-# API Endpoint: Clear all logs (truncate the primary file – kept for compatibility; consider updating to clear all files if needed)
+# API Endpoint: Clear all logs (delete all files in the directory)
 @log_blueprint.route('/clear', methods=['POST'])
 def clear_logs():
     """
-    Clear all logs by truncating the primary file.
+    Clear all logs by deleting all files in the logs directory.
     """
-    open(LOGS_FILE, "w").close()
-    return jsonify({"status": "success", "message": "Logs cleared."})
+    try:
+        for file in os.listdir(LOG_DIR):
+            file_path = os.path.join(LOG_DIR, file)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+        return jsonify({"status": "success", "message": "All logs cleared."})
+    except Exception as e:
+        return jsonify({"status": "failure", "message": str(e)}), 500
 
 
-# NEW: API Endpoint: List all log files in the directory
+# API Endpoint: List all log files in the directory
 @log_blueprint.route('/list', methods=['GET'])
 def list_logs():
     """
@@ -70,7 +44,7 @@ def list_logs():
         return jsonify({"status": "failure", "message": str(e)}), 500
 
 
-# NEW: API Endpoint: View the content of a specific log file (as plain text)
+# API Endpoint: View the content of a specific log file (as plain text)
 @log_blueprint.route('/view/<path:file>', methods=['GET'])
 def view_log(file):
     """
@@ -84,7 +58,7 @@ def view_log(file):
     return content, 200, {'Content-Type': 'text/plain'}
 
 
-# NEW: API Endpoint: Download a specific log file
+# API Endpoint: Download a specific log file
 @log_blueprint.route('/download/<path:file>', methods=['GET'])
 def download_log(file):
     """
@@ -96,7 +70,7 @@ def download_log(file):
     return send_file(log_path, as_attachment=True)
 
 
-# NEW: API Endpoint: Delete a specific log file
+# API Endpoint: Delete a specific log file
 @log_blueprint.route('/delete/<path:file>', methods=['POST'])
 def delete_log(file):
     """
