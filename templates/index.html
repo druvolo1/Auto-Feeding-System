@@ -6,6 +6,28 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <link rel="manifest" href="/static/manifest.json">
+    <style>
+        #plants-table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        #plants-table th, #plants-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        #plants-table th {
+            background-color: #2a2a2a;
+            color: #f4c531;
+        }
+        #plants-table tr:nth-child(even) {
+            background-color: #1e1e1e;
+        }
+        #plants-table tr:hover {
+            background-color: #333;
+        }
+    </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
     <script>
         const socket = io.connect('http://' + document.domain + ':' + location.port + '/status');
@@ -58,10 +80,10 @@
                 row.insertCell().innerText = plant.feeding_in_progress ? 'Yes' : 'No';
                 row.insertCell().innerText = plant.last_update ? new Date(plant.last_update).toLocaleString() : 'Never';
 
-                // Add water level columns
+                // Add water level columns (flipped logic: triggered means Not Present)
                 sensorKeys.forEach(key => {
                     const sensor = plant.water_level?.[key] || {triggered: false};
-                    const status = sensor.triggered ? 'Present' : 'Not Present';
+                    const status = sensor.triggered ? 'Not Present' : 'Present';
                     row.insertCell().innerText = status;
                 });
 
