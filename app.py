@@ -7,6 +7,7 @@ from flask_cors import CORS
 import socketio as sio_module  # Renamed to avoid conflict
 from threading import Lock, Event
 import time
+import socket
 
 # Blueprints
 from api.fresh_flow import fresh_flow_blueprint
@@ -46,21 +47,29 @@ def connect_to_remote_plant(plant):
     if plant in plant_clients:
         return  # Already connected
 
+    try:
+        # Resolve name to IP to debug resolution
+        ip = socket.gethostbyname(plant)
+        print(f"[DEBUG] Resolved {plant} to IP: {ip}")
+    except socket.gaierror as e:
+        print(f"[ERROR] Name resolution failed for {plant}: {e}")
+        return
+
     sio = sio_module.Client()
     plant_clients[plant] = sio
 
-    @sio.event
+    @sio.event(namespace='/status')
     def connect():
         print(f"[INFO] Connected to remote plant: {plant}")
 
-    @sio.event
+    @sio.event(namespace='/status')
     def disconnect():
         print(f"[INFO] Disconnected from remote plant: {plant}")
         with plant_lock:
             if plant in plant_data:
                 plant_data[plant]['last_update'] = None  # Mark as offline
 
-    @sio.on('status_update')
+    @sio.on('status_update', namespace='/status')
     def handle_status_update(data):
         print(f"[DEBUG] Received status_update from {plant}: {data}")  # Added debug print
         with plant_lock:
@@ -73,12 +82,15 @@ def connect_to_remote_plant(plant):
 
     try:
         sio.connect(f'http://{plant}:8000', namespaces=['/status'])
+        print(f"[DEBUG] Connect attempt to {plant} initiated")
     except Exception as e:
         print(f"[ERROR] Failed to connect to {plant}: {e}")
 
 def reload_plants():
+    print("[DEBUG] Reloading plants...")
     settings = load_settings()
     additional_plants = settings.get('additional_plants', [])
+    print(f"[DEBUG] Loaded additional_plants: {additional_plants}")
     
     # Connect to new plants
     for plant in additional_plants:
@@ -100,6 +112,7 @@ def monitor_remote_plants():
     
     while True:
         reload_event.wait()  # Wait for signal
+        print("[DEBUG] Reload event triggered")
         reload_event.clear()
         reload_plants()
 
