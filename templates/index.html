@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
     <script>
         const socket = io.connect('http://' + document.domain + ':' + location.port + '/status');
+
         socket.on('flow_update', function(data) {
             document.getElementById('fresh-flow-rate').innerText = (data.fresh_flow !== null ? data.fresh_flow + ' Gal/min' : 'Loading...');
             document.getElementById('fresh-total-volume').innerText = (data.fresh_total_volume !== null ? data.fresh_total_volume + ' Gal' : 'Loading...');
@@ -19,6 +20,32 @@
 
             const now = new Date();
             document.getElementById('last-updated').innerText = `Last updated: ${now.toLocaleString()}`;
+        });
+
+        socket.on('plants_update', function(data) {
+            const plantsContainer = document.getElementById('plants-container');
+            plantsContainer.innerHTML = ''; // Clear existing content
+
+            data.plants.forEach(plant => {
+                const plantDiv = document.createElement('div');
+                plantDiv.className = 'data-container';
+                plantDiv.innerHTML = `
+                    <h3>${plant.system_name || 'Unknown'} (${plant.plant_name || 'N/A'})</h3>
+                    <div class="data-box">Start Date: ${plant.start_date || 'N/A'}</div>
+                    <div class="data-box">Current pH: ${plant.current_ph !== null ? plant.current_ph : 'N/A'}</div>
+                    <div class="data-box">Feeding in Progress: ${plant.feeding_in_progress ? 'Yes' : 'No'}</div>
+                    <div class="data-box">Heartbeat: ${plant.last_update ? new Date(plant.last_update).toLocaleString() : 'Never'}</div>
+                    <h4>Water Levels</h4>
+                    ${Object.entries(plant.water_level || {}).map(([key, sensor]) => `
+                        <div class="data-box">${sensor.label}: ${sensor.triggered ? 'Triggered' : 'Not Triggered'}</div>
+                    `).join('')}
+                    <div style="display: none;" id="valve-info-${plant.ip || 'local'}">
+                        Fill IP: ${plant.valve_info?.fill_valve_ip || ''}, Fill Valve: ${plant.valve_info?.fill_valve || ''},
+                        Drain IP: ${plant.valve_info?.drain_valve_ip || ''}, Drain Valve: ${plant.valve_info?.drain_valve || ''}
+                    </div>
+                `;
+                plantsContainer.appendChild(plantDiv);
+            });
         });
 
         function resetFreshTotal() {
@@ -62,7 +89,7 @@
     <nav>
         <ul>
             <li><a href="/" class="active">Home</a></li>
-            <li><a href="/settings" class="active">Settings</a></li>
+            <li><a href="/settings">Settings</a></li>
         </ul>
     </nav>
 
@@ -91,6 +118,11 @@
                 <div class="data-box">Total Volume: <span id="drain-total-volume">Loading...</span></div>
                 <button onclick="resetDrainTotal()">Reset Drain Total Volume</button>
             </div>
+        </div>
+
+        <h2>Plants</h2>
+        <div id="plants-container" class="row-flex">
+            <!-- Dynamically populated by JS -->
         </div>
 
         <p id="last-updated" class="last-updated">Last updated: Never</p>
