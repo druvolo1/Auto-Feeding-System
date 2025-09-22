@@ -44,7 +44,7 @@ def reinitialize_relay_service():
             ser.write(RELAY_OFF_COMMANDS[2])
         print("Valve Relay service reinitialized successfully.")
     except Exception as e:
-        print(f"Error reinitializing Valve relay service: {e}")
+        print(f"Error reinitializing valve relay service: {e}")
 
 def turn_on_relay(relay_id):
     try:
