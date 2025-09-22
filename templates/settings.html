@@ -23,7 +23,6 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
-            fetchUsbDevices(); // Add this to load USB devices
         });
 
         function loadSettings() {
@@ -51,8 +50,31 @@
                     const relayPorts = data.relay_ports || { feed_water: 1, fresh_water: 2 };
                     document.getElementById('feed-water-relay-port').value = relayPorts.feed_water;
                     document.getElementById('fresh-water-relay-port').value = relayPorts.fresh_water;
+
+                    // Load USB roles and populate select
+                    data.usb_roles = data.usb_roles || {};
+                    populateUsbSelect(data);
                 })
                 .catch(error => console.error('Error loading settings:', error));
+        }
+
+        function populateUsbSelect(settingsData) {
+            fetch('/api/settings/usb_devices')
+                .then(response => response.json())
+                .then(devices => {
+                    const dosingDevSelect = document.getElementById('dosing-relay-device');
+                    dosingDevSelect.innerHTML = '<option value="">Select a device</option>';
+                    devices.forEach(dev => {
+                        const option = document.createElement('option');
+                        option.value = dev.device;
+                        option.textContent = dev.device;
+                        if (option.value === settingsData.usb_roles.dosing_relay) {
+                            option.selected = true;
+                        }
+                        dosingDevSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error fetching USB devices:', error));
         }
 
         function addAdditionalPlant() {
@@ -123,38 +145,46 @@
                 .catch(error => console.error('Error saving calibration factors:', error));
         }
 
-        function fetchUsbDevices() {
-            fetch('/api/settings/usb_devices')
-                .then(response => response.json())
-                .then(devices => {
-                    const dosingDevSelect = document.getElementById('dosing-relay-device');
-                    dosingDevSelect.innerHTML = '<option value="">Select a device</option>';
-                    devices.forEach(dev => {
-                        const option = document.createElement('option');
-                        option.value = dev.device;
-                        option.textContent = dev.device;
-                        dosingDevSelect.appendChild(option);
-                    });
-                })
-                .catch(error => console.error('Error fetching USB devices:', error));
-        }
-
-        function saveUsbAssignment(role, device) {
+        document.getElementById('dosing-relay-form').addEventListener('submit', e => {
+            e.preventDefault();
+            const dev = document.getElementById('dosing-relay-device').value;
             fetch("/api/settings/assign_usb", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role, device })
+                body: JSON.stringify({ role: 'dosing_relay', device: dev })
             })
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        alert(`${role} assigned successfully.`);
+                        alert('Dosing relay assigned successfully.');
+                        loadSettings();
                     } else {
-                        alert(`Failed to assign ${role}: ${data.error}`);
+                        alert('Failed to assign dosing relay: ' + data.error);
                     }
                 })
-                .catch(error => console.error(`Error assigning ${role}:`, error));
-        }
+                .catch(error => console.error('Error assigning dosing relay:', error));
+        });
+
+        document.getElementById('relay-port-form').addEventListener('submit', e => {
+            e.preventDefault();
+            const feedPort = parseInt(document.getElementById('feed-water-relay-port').value, 10);
+            const freshPort = parseInt(document.getElementById('fresh-water-relay-port').value, 10);
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ relay_ports: { feed_water: feedPort, fresh_water: freshPort } })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Relay ports saved successfully.');
+                        loadSettings();
+                    } else {
+                        alert('Failed to save relay ports: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error saving relay ports:', error));
+        });
     </script>
 </head>
 <body>
@@ -210,7 +240,6 @@
                 </select>
                 <button type="submit">Save Dosing Relay Module</button>
             </form>
-            <button onclick="fetchUsbDevices()">Rescan USB Devices</button>
         </div>
 
         <!-- Dosing Relay Port Assignments -->
