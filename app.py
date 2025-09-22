@@ -6,10 +6,10 @@ from flask_socketio import SocketIO
 from flask_cors import CORS
 
 # Blueprints
-from api.flow import flow_blueprint
+from api.fresh_flow import fresh_flow_blueprint
 
 # Services
-from services.flow_service import get_latest_flow_rate, flow_reader
+from services.fresh_flow_service import get_latest_flow_rate, flow_reader
 
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
@@ -23,7 +23,7 @@ set_socketio_instance(socketio)
 socketio.on_namespace(StatusNamespace('/status'))
 
 # Register blueprints
-app.register_blueprint(flow_blueprint, url_prefix='/api/flow')
+app.register_blueprint(fresh_flow_blueprint, url_prefix='/api/fresh_flow')
 
 # Background tasks
 def broadcast_flow_rates():
@@ -35,15 +35,15 @@ def broadcast_flow_rates():
                 flow_rate = round(flow_rate, 2)
                 if flow_rate != last_emitted_value:
                     last_emitted_value = flow_rate
-                    print(f"[DEBUG] Emitting flow_update: {flow_rate} L/min")  # NEW: Confirm emit
-                    socketio.emit('flow_update', {'flow': flow_rate}, namespace='/status')  # FIXED: Add namespace
+                    print(f"[DEBUG] Emitting flow_update: {flow_rate} L/min")
+                    socketio.emit('flow_update', {'flow': flow_rate}, namespace='/status')
             eventlet.sleep(1)
         except Exception as e:
             print(f"[ERROR] Broadcast error: {e}")
 
 def start_threads():
     try:
-        print("[INIT] Starting flow reader thread...")
+        print("[INIT] Starting fresh flow reader thread...")
         eventlet.spawn(flow_reader)
         print("[INIT] Starting broadcast thread...")
         eventlet.spawn(broadcast_flow_rates)
