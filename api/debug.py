@@ -1,11 +1,8 @@
 from flask import Blueprint, jsonify, request, render_template
 import json
 import os
-from app import app  # For app context if needed
 
 debug_blueprint = Blueprint('debug', __name__)
-
-SETTINGS_FILE = os.path.join(os.getcwd(), "data", "settings.json")
 
 # Global debug states
 debug_states = {
@@ -15,6 +12,8 @@ debug_states = {
     'socket_connections': False,
     'plants': False
 }
+
+SETTINGS_FILE = os.path.join(os.getcwd(), "data", "settings.json")
 
 def load_debug_states():
     if os.path.exists(SETTINGS_FILE):
