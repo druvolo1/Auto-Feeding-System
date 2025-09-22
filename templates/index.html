@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <title>Flow Meter Monitor</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="manifest" href="/static/manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
     <script>
         const socket = io.connect('http://' + document.domain + ':' + location.port + '/status');
@@ -16,6 +16,9 @@
             document.getElementById('feed-total-volume').innerText = (data.feed_total_volume !== null ? data.feed_total_volume + ' Gal' : 'Loading...');
             document.getElementById('drain-flow-rate').innerText = (data.drain_flow !== null ? data.drain_flow + ' Gal/min' : 'Loading...');
             document.getElementById('drain-total-volume').innerText = (data.drain_total_volume !== null ? data.drain_total_volume + ' Gal' : 'Loading...');
+
+            const now = new Date();
+            document.getElementById('last-updated').innerText = `Last updated: ${now.toLocaleString()}`;
         });
 
         function resetFreshTotal() {
@@ -59,7 +62,9 @@
     <nav>
         <ul>
             <li><a href="#" class="active">Home</a></li>
+            <li><a href="#">Dosage</a></li>
             <li><a href="#">Settings</a></li>
+            <li><a href="#">Logs</a></li>
         </ul>
     </nav>
 
@@ -90,7 +95,7 @@
             </div>
         </div>
 
-        <p class="last-updated">Last updated: Never</p>
+        <p id="last-updated" class="last-updated">Last updated: Never</p>
     </main>
 </body>
 </html>
