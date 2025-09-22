@@ -5,7 +5,7 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO
 from flask_cors import CORS
 import socketio as sio_module  # Renamed to avoid conflict
-from threading import Lock
+from threading import Lock, Event
 import time
 
 # Blueprints
@@ -40,6 +40,7 @@ app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
 plant_data = {}  # { 'plant_ip': {...} }
 plant_lock = Lock()
 plant_clients = {}  # { 'plant_ip': sio_client }
+reload_event = Event()
 
 def connect_to_remote_plant(plant):
     if plant in plant_clients:
@@ -75,26 +76,32 @@ def connect_to_remote_plant(plant):
     except Exception as e:
         print(f"[ERROR] Failed to connect to {plant}: {e}")
 
+def reload_plants():
+    settings = load_settings()
+    additional_plants = settings.get('additional_plants', [])
+    
+    # Connect to new plants
+    for plant in additional_plants:
+        if plant not in plant_clients:
+            connect_to_remote_plant(plant)
+    
+    # Disconnect from removed plants
+    for plant in list(plant_clients.keys()):
+        if plant not in additional_plants:
+            plant_clients[plant].disconnect()
+            del plant_clients[plant]
+            with plant_lock:
+                if plant in plant_data:
+                    del plant_data[plant]
+
 def monitor_remote_plants():
+    # Initial load on startup
+    reload_plants()
+    
     while True:
-        settings = load_settings()
-        additional_plants = settings.get('additional_plants', [])
-        
-        # Connect to new plants
-        for plant in additional_plants:
-            if plant not in plant_clients:
-                connect_to_remote_plant(plant)
-        
-        # Disconnect from removed plants
-        for plant in list(plant_clients.keys()):
-            if plant not in additional_plants:
-                plant_clients[plant].disconnect()
-                del plant_clients[plant]
-                with plant_lock:
-                    if plant in plant_data:
-                        del plant_data[plant]
-        
-        eventlet.sleep(60)  # Check for changes every minute
+        reload_event.wait()  # Wait for signal
+        reload_event.clear()
+        reload_plants()
 
 def broadcast_plants_status():
     last_emitted = None

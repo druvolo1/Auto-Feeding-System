@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 import json
 import os
+from app import reload_event  # Import the event
 
 settings_blueprint = Blueprint('settings', __name__)
 
@@ -35,12 +36,17 @@ def update_settings():
     data = request.get_json() or {}
     settings = load_settings()
 
-    if 'additional_plants' in data:
+    plants_changed = 'additional_plants' in data
+    if plants_changed:
         settings['additional_plants'] = settings.get('additional_plants', []) + data['additional_plants']
 
     # Handle other settings updates as needed
 
     save_settings(settings)
+    
+    if plants_changed:
+        reload_event.set()  # Trigger reload
+
     return jsonify({"status": "success", "settings": settings})
 
 @settings_blueprint.route('/remove_plant', methods=['POST'])
@@ -54,6 +60,7 @@ def remove_plant():
     if 'additional_plants' in settings and 0 <= index < len(settings['additional_plants']):
         del settings['additional_plants'][index]
         save_settings(settings)
+        reload_event.set()  # Trigger reload
         return jsonify({"status": "success", "settings": settings})
     else:
         return jsonify({"status": "failure", "error": "Invalid index"}), 400
