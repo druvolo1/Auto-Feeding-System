@@ -7,8 +7,8 @@
     <script>
         const socket = io.connect('http://' + document.domain + ':' + location.port + '/status');
         socket.on('flow_update', function(data) {
-            document.getElementById('flow-rate').innerText = (data.flow !== null ? data.flow + ' L/min' : 'Loading...');
-            document.getElementById('total-volume').innerText = (data.total_volume !== null ? data.total_volume + ' L' : 'Loading...');
+            document.getElementById('flow-rate').innerText = (data.flow !== null ? data.flow + ' Gal/min' : 'Loading...');
+            document.getElementById('total-volume').innerText = (data.total_volume !== null ? data.total_volume + ' Gal' : 'Loading...');
         });
 
         function resetTotal() {

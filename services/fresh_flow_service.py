@@ -3,10 +3,10 @@ import time
 from threading import Lock
 
 FLOW_PIN = 18  # BCM pin for fresh flow
-CALIBRATION_FACTOR = 7.5
+CALIBRATION_FACTOR = 28.390575  # Pulses per gallon (original 7.5 per liter * 3.78541 liters/gallon)
 
 latest_flow = None
-total_volume = 0.0  # NEW: Accumulated total in liters
+total_volume = 0.0  # NEW: Accumulated total in gallons
 flow_lock = Lock()
 
 def flow_reader():
@@ -33,12 +33,12 @@ def flow_reader():
                 time.sleep(0.001)
 
             flow_rate = pulse_count / CALIBRATION_FACTOR
-            print(f"[DEBUG] Fresh pulses in last second: {pulse_count}, Calculated flow: {flow_rate} L/min")
+            print(f"[DEBUG] Fresh pulses in last second: {pulse_count}, Calculated flow: {flow_rate} gal/min")
 
             with flow_lock:
                 global latest_flow, total_volume
                 latest_flow = flow_rate
-                total_volume += flow_rate / 60  # NEW: Accumulate (L/min / 60 = liters this second)
+                total_volume += flow_rate / 60  # NEW: Accumulate (gal/min / 60 = gallons this second)
         except Exception as e:
             print(f"[ERROR] Fresh flow reader loop error: {e}")
 
@@ -54,4 +54,4 @@ def reset_total():
     with flow_lock:
         global total_volume
         total_volume = 0.0
-        print("[DEBUG] Total volume reset to 0.0 liters")
+        print("[DEBUG] Total volume reset to 0.0 gallons")
