@@ -1,9 +1,5 @@
-# services/valve_relay_service.py
-
 import serial
-import json
 import os
-
 
 # USB Relay Commands
 RELAY_ON_COMMANDS = {
@@ -21,10 +17,9 @@ relay_status = {
     2: "off"
 }
 
-SETTINGS_FILE = os.path.join(os.getcwd(), "data", "settings.json")
+from utils.settings_utils import load_settings
 
 def get_relay_device_path():
-    from api.settings import load_settings
     settings = load_settings()
     relay_device = settings.get("usb_roles", {}).get("valve_relay")
     if not relay_device:
@@ -32,7 +27,6 @@ def get_relay_device_path():
     return relay_device
 
 def get_relay_port(relay_name):
-    from api.settings import load_settings
     settings = load_settings()
     relay_ports = settings.get("relay_ports", {"feed_water": 1, "fresh_water": 2})
     return relay_ports.get(relay_name, 1)  # Default to 1 if not found
