@@ -190,11 +190,14 @@ def broadcast_flow_rates():
 
 def start_threads():
     try:
-        print("[INIT] Starting fresh flow reader thread...")
+        if debug_states.get('fresh_flow', False):
+            print("[INIT] Starting fresh flow reader thread...")
         eventlet.spawn(fresh_flow_reader)
-        print("[INIT] Starting feed flow reader thread...")
+        if debug_states.get('feed_flow', False):
+            print("[INIT] Starting feed flow reader thread...")
         eventlet.spawn(feed_flow_reader)
-        print("[INIT] Starting drain flow reader thread...")
+        if debug_states.get('drain_flow', False):
+            print("[INIT] Starting drain flow reader thread...")
         eventlet.spawn(drain_flow_reader)
         print("[INIT] Starting broadcast thread...")
         eventlet.spawn(broadcast_flow_rates)
