@@ -66,6 +66,7 @@
                     <th>Start Date</th>
                     <th>Current pH</th>
                     <th>Feeding in Progress</th>
+                    <th>Allow Remote Feeding</th>
                     <th>Heartbeat</th>
                     ${sensorHeaders.map(label => `<th>${label}</th>`).join('')}
                 </tr>
@@ -78,12 +79,13 @@
                 row.insertCell().innerText = plant.start_date || 'N/A';
                 row.insertCell().innerText = plant.current_ph !== null ? plant.current_ph : 'N/A';
                 row.insertCell().innerText = plant.feeding_in_progress ? 'Yes' : 'No';
+                row.insertCell().innerText = plant.settings.allow_remote_feeding ? 'Yes' : 'No';  // Assuming boolean, adjust if needed
                 row.insertCell().innerText = plant.last_update ? new Date(plant.last_update).toLocaleString() : 'Never';
 
-                // Add water level columns (flipped logic: triggered means Not Present)
+                // Add water level columns
                 sensorKeys.forEach(key => {
                     const sensor = plant.water_level?.[key] || {triggered: false};
-                    const status = sensor.triggered ? 'Not Present' : 'Present';
+                    const status = sensor.triggered ? 'Present' : 'Not Present';
                     row.insertCell().innerText = status;
                 });
 
