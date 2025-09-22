@@ -69,6 +69,8 @@
                     <th>Allow Remote Feeding</th>
                     <th>Heartbeat</th>
                     ${sensorHeaders.map(label => `<th>${label}</th>`).join('')}
+                    <th>Fill Valve</th>
+                    <th>Drain Valve</th>
                 </tr>
             `;
 
@@ -88,6 +90,14 @@
                     const status = sensor.triggered ? 'Not Present' : 'Present';
                     row.insertCell().innerText = status;
                 });
+
+                // Add fill and drain valve statuses
+                const fillLabel = plant.valve_info?.fill_valve_label || "";
+                const drainLabel = plant.valve_info?.drain_valve_label || "";
+                const fillStatus = (plant.valve_info?.valve_relays?.[fillLabel]?.status || "N/A").toUpperCase();
+                const drainStatus = (plant.valve_info?.valve_relays?.[drainLabel]?.status || "N/A").toUpperCase();
+                row.insertCell().innerText = fillStatus;
+                row.insertCell().innerText = drainStatus;
 
                 // Hidden valve info (per row, if needed)
                 const hiddenDiv = document.createElement('div');
