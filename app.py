@@ -24,6 +24,9 @@ from services.drain_flow_service import get_latest_flow_rate as get_latest_drain
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
 
+# Import debug_states for conditional prints
+from api.debug import debug_states
+
 app = Flask(__name__)
 CORS(app)
 
@@ -52,9 +55,11 @@ def connect_to_remote_plant(plant):
     try:
         # Resolve name to IP to debug resolution
         ip = socket.gethostbyname(plant)
-        print(f"[DEBUG] Resolved {plant} to IP: {ip}")
+        if debug_states.get('socket_connections', False):
+            print(f"[DEBUG] Resolved {plant} to IP: {ip}")
     except socket.gaierror as e:
-        print(f"[ERROR] Name resolution failed for {plant}: {e}")
+        if debug_states.get('socket_connections', False):
+            print(f"[ERROR] Name resolution failed for {plant}: {e}")
         return
 
     sio = sio_module.Client()
@@ -62,18 +67,21 @@ def connect_to_remote_plant(plant):
 
     @sio.event(namespace='/status')
     def connect():
-        print(f"[INFO] Connected to remote plant: {plant}")
+        if debug_states.get('socket_connections', False):
+            print(f"[INFO] Connected to remote plant: {plant}")
 
     @sio.event(namespace='/status')
     def disconnect():
-        print(f"[INFO] Disconnected from remote plant: {plant}")
+        if debug_states.get('socket_connections', False):
+            print(f"[INFO] Disconnected from remote plant: {plant}")
         with plant_lock:
             if plant in plant_data:
                 plant_data[plant]['last_update'] = None  # Mark as offline
 
     @sio.on('status_update', namespace='/status')
     def handle_status_update(data):
-        print(f"[DEBUG] Received status_update from {plant}: {data}")  # Added debug print
+        if debug_states.get('plants', False):
+            print(f"[DEBUG] Received status_update from {plant}: {data}")
         with plant_lock:
             data['last_update'] = time.time() * 1000  # Milliseconds for JS
             data['ip'] = plant  # For identification
@@ -84,15 +92,19 @@ def connect_to_remote_plant(plant):
 
     try:
         sio.connect(f'http://{plant}:8000', namespaces=['/status'])
-        print(f"[DEBUG] Connect attempt to {plant} initiated")
+        if debug_states.get('socket_connections', False):
+            print(f"[DEBUG] Connect attempt to {plant} initiated")
     except Exception as e:
-        print(f"[ERROR] Failed to connect to {plant}: {e}")
+        if debug_states.get('socket_connections', False):
+            print(f"[ERROR] Failed to connect to {plant}: {e}")
 
 def reload_plants():
-    print("[DEBUG] Reloading plants...")
+    if debug_states.get('plants', False):
+        print("[DEBUG] Reloading plants...")
     settings = load_settings()
     additional_plants = settings.get('additional_plants', [])
-    print(f"[DEBUG] Loaded additional_plants: {additional_plants}")
+    if debug_states.get('plants', False):
+        print(f"[DEBUG] Loaded additional_plants: {additional_plants}")
     
     # Connect to new plants
     for plant in additional_plants:
@@ -114,7 +126,8 @@ def monitor_remote_plants():
     
     while True:
         reload_event.wait()  # Wait for signal
-        print("[DEBUG] Reload event triggered")
+        if debug_states.get('plants', False):
+            print("[DEBUG] Reload event triggered")
         reload_event.clear()
         reload_plants()
 
@@ -133,7 +146,8 @@ def broadcast_plants_status():
                 
                 if current_data != last_emitted:
                     last_emitted = current_data
-                    print(f"[DEBUG] Emitting plants_update: {len(current_data['plants'])} plants - Data: {current_data}")
+                    if debug_states.get('plants', False):
+                        print(f"[DEBUG] Emitting plants_update: {len(current_data['plants'])} plants - Data: {current_data}")
                     socketio.emit('plants_update', current_data, namespace='/status')
             
             eventlet.sleep(5)  # Broadcast every 5 seconds
@@ -167,7 +181,8 @@ def broadcast_flow_rates():
 
             if data != last_emitted:
                 last_emitted = data
-                print(f"[DEBUG] Emitting flow_update: {data}")
+                if debug_states.get('socket_connections', False):
+                    print(f"[DEBUG] Emitting flow_update: {data}")
                 socketio.emit('flow_update', data, namespace='/status')
             eventlet.sleep(1)
         except Exception as e:
