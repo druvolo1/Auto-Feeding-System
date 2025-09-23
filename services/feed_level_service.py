@@ -12,4 +12,4 @@ def get_feed_level():
     if GPIO.input(PIN) == GPIO.LOW:
         return 'Empty'
     else:
-        return 'Full'
+        return 'Present'
