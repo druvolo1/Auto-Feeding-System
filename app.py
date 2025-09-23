@@ -137,7 +137,6 @@ def monitor_remote_plants():
         reload_plants()
 
 def broadcast_plants_status():
-    last_emitted = None
     while True:
         try:
             with plant_lock:
@@ -149,11 +148,9 @@ def broadcast_plants_status():
                 
                 current_data = aggregated
                 
-                if current_data != last_emitted:
-                    last_emitted = current_data
-                    if debug_states.get('plants', False):
-                        print(f"[DEBUG] Emitting plants_update: {len(current_data['plants'])} plants - Data: {current_data}")
-                    socketio.emit('plants_update', current_data, namespace='/status')
+                if debug_states.get('plants', False):
+                    print(f"[DEBUG] Emitting plants_update: {len(current_data['plants'])} plants - Data: {current_data}")
+                socketio.emit('plants_update', current_data, namespace='/status')
             
             eventlet.sleep(5)  # Broadcast every 5 seconds
         except Exception as e:
@@ -162,13 +159,6 @@ def broadcast_plants_status():
 
 # Background tasks
 def broadcast_local_status():
-    last_emitted = {
-        'fresh_flow': None, 'fresh_total_volume': None,
-        'feed_flow': None, 'feed_total_volume': None,
-        'drain_flow': None, 'drain_total_volume': None,
-        'relay1_status': None, 'relay2_status': None,
-        'feed_level': None
-    }
     while True:
         try:
             fresh_flow_rate = get_latest_fresh_flow_rate()
@@ -193,11 +183,9 @@ def broadcast_local_status():
                 'feed_level': feed_level
             }
 
-            if data != last_emitted:
-                last_emitted = data
-                if debug_states.get('socket-connections', False):
-                    print(f"[DEBUG] Emitting local_status_update: {data}")
-                socketio.emit('local_status_update', data, namespace='/status')
+            if debug_states.get('socket-connections', False):
+                print(f"[DEBUG] Emitting local_status_update: {data}")
+            socketio.emit('local_status_update', data, namespace='/status')
             eventlet.sleep(1)
         except Exception as e:
             print(f"[ERROR] Broadcast error: {e}")
