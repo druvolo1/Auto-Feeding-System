@@ -29,6 +29,9 @@ from services.feed_level_service import get_feed_level
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
 
+# mDNS helper
+from utils.mdns_utils import standardize_host_ip
+
 app = Flask(__name__)
 CORS(app)
 
@@ -57,15 +60,14 @@ def connect_to_remote_plant(plant):
     if plant in plant_clients:
         return  # Already connected
 
-    try:
-        # Resolve name to IP to debug resolution
-        ip = socket.gethostbyname(plant)
+    ip = standardize_host_ip(plant)
+    if not ip:
         if debug_states.get('socket-connections', False):
-            print(f"[DEBUG] Resolved {plant} to IP: {ip}")
-    except socket.gaierror as e:
-        if debug_states.get('socket-connections', False):
-            print(f"[ERROR] Name resolution failed for {plant}: {e}")
+            print(f"[ERROR] Name resolution failed for {plant}")
         return
+
+    if debug_states.get('socket-connections', False):
+        print(f"[DEBUG] Resolved {plant} to IP: {ip}")
 
     sio = sio_module.Client()
     plant_clients[plant] = sio
@@ -89,19 +91,19 @@ def connect_to_remote_plant(plant):
             print(f"[DEBUG] Received status_update from {plant}: {data}")
         with plant_lock:
             data['last_update'] = time.time() * 1000  # Milliseconds for JS
-            data['ip'] = plant  # For identification
+            data['ip'] = plant  # For identification (original hostname)
             data['system_name'] = data['settings'].get('system_name', plant)
             data['plant_name'] = data['settings'].get('plant_info', {}).get('name', 'N/A')
             data['start_date'] = data['settings'].get('plant_info', {}).get('start_date', 'N/A')
             plant_data[plant] = data
 
     try:
-        sio.connect(f'http://{plant}:8000', namespaces=['/status'])
+        sio.connect(f'http://{ip}:8000', namespaces=['/status'])
         if debug_states.get('socket-connections', False):
-            print(f"[DEBUG] Connect attempt to {plant} initiated")
+            print(f"[DEBUG] Connect attempt to {plant} at {ip} initiated")
     except Exception as e:
         if debug_states.get('socket-connections', False):
-            print(f"[ERROR] Failed to connect to {plant}: {e}")
+            print(f"[ERROR] Failed to connect to {plant} at {ip}: {e}")
 
 def reload_plants():
     if debug_states.get('plants', False):
