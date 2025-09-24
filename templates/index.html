@@ -168,17 +168,18 @@
                 return;
             }
 
-            // Dynamically determine sensor columns (only if not set)
+            // Dynamically determine sensor columns on every update
             let sensorKeys = [];
             let sensorHeaders = [];
             const firstOnlinePlant = data.plants.find(plant => plant.is_online === true) || data.plants[0];
-            if (!headersSet && firstOnlinePlant) {
+            if (firstOnlinePlant) {
                 const firstPlantWaterLevels = firstOnlinePlant.water_level || {};
                 sensorKeys = Object.keys(firstPlantWaterLevels);
                 sensorHeaders = sensorKeys.map(key => firstPlantWaterLevels[key]?.label || key);
             }
 
-            if (!headersSet) {
+            // Update headers if sensorKeys have changed or on first load
+            if (!headersSet || sensorKeys.length > 0) {
                 thead.innerHTML = `
                     <tr>
                         <th>System Name</th>
