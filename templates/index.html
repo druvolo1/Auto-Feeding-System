@@ -158,18 +158,20 @@
         let headersSet = false; // Flag to track if headers are initialized
 
         socket.on('plants_update', function(data) {
+            console.log('Received plants_update:', data); // Debug log
             const plantsTableBody = document.getElementById('plants-table').getElementsByTagName('tbody')[0];
             const thead = document.getElementById('plants-table').getElementsByTagName('thead')[0];
             plantsTableBody.innerHTML = ''; // Clear existing rows
 
             if (!data.plants || data.plants.length === 0) {
+                console.log('No plants data received');
                 return;
             }
 
             // Dynamically determine sensor columns (only if not set)
             let sensorKeys = [];
             let sensorHeaders = [];
-            const firstOnlinePlant = data.plants.find(plant => plant.is_online) || data.plants[0];
+            const firstOnlinePlant = data.plants.find(plant => plant.is_online === true) || data.plants[0];
             if (!headersSet && firstOnlinePlant) {
                 const firstPlantWaterLevels = firstOnlinePlant.water_level || {};
                 sensorKeys = Object.keys(firstPlantWaterLevels);
@@ -198,11 +200,14 @@
             // Build rows in a fragment to batch DOM insertion
             const fragment = document.createDocumentFragment();
             data.plants.forEach(plant => {
+                console.log(`Processing plant ${plant.ip || 'local'}: is_online = ${plant.is_online}`); // Debug log
                 const row = document.createElement('tr');
 
-                // Apply disconnected class if plant is offline
-                if (!plant.is_online) {
+                // Apply disconnected class only if plant is explicitly offline
+                if (plant.is_online === false) {
                     row.classList.add('disconnected');
+                } else if (plant.is_online === undefined) {
+                    console.warn(`Plant ${plant.ip || 'local'} has undefined is_online, treating as online`);
                 }
 
                 // Add cells
@@ -252,7 +257,7 @@
                 fragment.appendChild(row);
             });
 
-            plantsTableBody.appendChild(fragment); // Single DOM append
+            plantsTableBody.appendChild(fragment); // Single DOM insert
         });
 
         function resetFreshTotal() {
