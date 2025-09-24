@@ -11,7 +11,8 @@ debug_states = {
     'drain-flow': False,
     'socket-connections': False,
     'plants': False,
-    'dns-resolution': False  # Added to match the UI
+    'dns-resolution': False,  # Already added
+    'local-websocket': False  # New debug flag for local WebSocket events
 }
 
 SETTINGS_FILE = os.path.join(os.getcwd(), "data", "settings.json")

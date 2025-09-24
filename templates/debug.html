@@ -28,6 +28,9 @@
 
                     const dnsResolutionCheckbox = document.getElementById('dns-resolution-debug');
                     if (dnsResolutionCheckbox) dnsResolutionCheckbox.checked = data['dns-resolution'] || false;
+
+                    const localWebsocketCheckbox = document.getElementById('local-websocket-debug');
+                    if (localWebsocketCheckbox) localWebsocketCheckbox.checked = data['local-websocket'] || false;
                 })
                 .catch(error => console.error('Error loading debug states:', error));
         });
@@ -100,6 +103,11 @@
             <div class="checkbox-container">
                 <label>DNS Resolution</label>
                 <input type="checkbox" id="dns-resolution-debug" onchange="toggleDebug('dns-resolution')">
+            </div>
+
+            <div class="checkbox-container">
+                <label>Local WebSocket</label>
+                <input type="checkbox" id="local-websocket-debug" onchange="toggleDebug('local-websocket')">
             </div>
         </div>
     </main>
