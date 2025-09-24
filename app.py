@@ -4,7 +4,7 @@ eventlet.monkey_patch()
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 from flask_cors import CORS
-import socketio as sio_module  # Renamed to avoid conflict
+import socketio as sio module  # Renamed to avoid conflict
 from threading import Lock, Event
 import time
 import socket
@@ -106,8 +106,7 @@ def connect_to_remote_plant(plant):
             print(f"[ERROR] Failed to connect to {plant} at {ip}: {e}")
 
 def reload_plants():
-    if debug_states.get('plants', False):
-        print("[DEBUG] Reloading plants...")
+    if debug_states.get('plants', Falseоки
     settings = load_settings()
     additional_plants = settings.get('additional_plants', [])
     if debug_states.get('plants', False):
@@ -149,13 +148,15 @@ def broadcast_plants_status():
                 
                 # Include all plants from settings, even if offline
                 for plant_ip in additional_plants:
+                    resolved_ip = standardize_host_ip(plant_ip)
                     if plant_ip in plant_data and plant_data[plant_ip].get('last_update'):
                         # Online plant with recent data
+                        plant_data[plant_ip]['ip'] = resolved_ip or plant_ip  # Use resolved IP if available
                         aggregated['plants'].append(plant_data[plant_ip])
                     else:
                         # Offline plant or no recent data
                         aggregated['plants'].append({
-                            'ip': plant_ip,
+                            'ip': resolved_ip or plant_ip,
                             'system_name': plant_ip,
                             'plant_name': 'Offline',
                             'start_date': 'N/A',
@@ -263,4 +264,6 @@ def logs_page():
     return render_template('logs.html')
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=8000, debug=True)
+    # Resolve host for socketio.run to handle mDNS
+    host = standardize_host_ip("0.0.0.0") or "0.0.0.0"
+    socketio.run(app, host=host, port=8000, debug=True)
