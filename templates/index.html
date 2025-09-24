@@ -134,6 +134,7 @@
         });
 
         socket.on('local_status_update', function(data) {
+            console.log('Received local_status_update:', data); // Added debug log
             document.getElementById('fresh-flow-rate').innerText = (data.fresh_flow !== null ? data.fresh_flow + ' Gal/min' : 'Loading...');
             document.getElementById('fresh-total-volume').innerText = (data.fresh_total_volume !== null ? data.fresh_total_volume + ' Gal' : 'Loading...');
             document.getElementById('feed-flow-rate').innerText = (data.feed_flow !== null ? data.feed_flow + ' Gal/min' : 'Loading...');
@@ -142,7 +143,7 @@
             document.getElementById('drain-total-volume').innerText = (data.drain_total_volume !== null ? data.drain_total_volume + ' Gal' : 'Loading...');
 
             const feedLevelStatus = document.getElementById('feed-level-status');
-            if (data.feed_level) {
+            if (data.feed_level !== undefined && data.feed_level !== null) { // More robust check
                 feedLevelStatus.innerText = data.feed_level;
                 feedLevelStatus.classList.remove('full', 'empty');
                 feedLevelStatus.classList.add(data.feed_level.toLowerCase());
