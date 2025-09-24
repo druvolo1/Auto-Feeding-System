@@ -35,6 +35,9 @@ from utils.mdns_utils import standardize_host_ip
 app = Flask(__name__)
 CORS(app)
 
+# Load settings into app.config for access via current_app.config['settings']
+app.config['settings'] = load_settings()
+
 socketio = SocketIO(async_mode="eventlet", cors_allowed_origins="*")
 socketio.init_app(app)
 set_socketio_instance(socketio)
