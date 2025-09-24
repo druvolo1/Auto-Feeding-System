@@ -204,11 +204,10 @@
                 console.log(`Processing plant ${plant.ip || 'local'}: is_online = ${plant.is_online}`); // Debug log
                 const row = document.createElement('tr');
 
-                // Apply disconnected class only if plant is explicitly offline
-                if (plant.is_online === false) {
+                // Apply disconnected class only if plant is explicitly offline or undefined
+                if (plant.is_online === false || plant.is_online === undefined) {
                     row.classList.add('disconnected');
-                } else if (plant.is_online === undefined) {
-                    console.warn(`Plant ${plant.ip || 'local'} has undefined is_online, treating as online`);
+                    console.warn(`Plant ${plant.ip || 'local'} is offline or has undefined is_online`);
                 }
 
                 // Add cells

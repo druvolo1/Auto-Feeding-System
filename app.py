@@ -79,6 +79,9 @@ def connect_to_remote_plant(plant):
     def connect():
         if debug_states.get('socket-connections', False):
             print(f"[INFO] Connected to remote plant: {plant} at {ip}")
+        with plant_lock:
+            if plant in plant_data:
+                plant_data[plant]['is_online'] = True  # Set is_online on connect
 
     @sio.event(namespace='/status')
     def disconnect():
@@ -86,7 +89,8 @@ def connect_to_remote_plant(plant):
             print(f"[INFO] Disconnected from remote plant: {plant} at {ip}")
         with plant_lock:
             if plant in plant_data:
-                plant_data[plant]['last_update'] = None  # Mark as offline
+                plant_data[plant]['last_update'] = None
+                plant_data[plant]['is_online'] = False  # Set is_online on disconnect
 
     @sio.on('status_update', namespace='/status')
     def handle_status_update(data):
@@ -98,6 +102,7 @@ def connect_to_remote_plant(plant):
             data['system_name'] = data['settings'].get('system_name', plant)
             data['plant_name'] = data['settings'].get('plant_info', {}).get('name', 'N/A')
             data['start_date'] = data['settings'].get('plant_info', {}).get('start_date', 'N/A')
+            data['is_online'] = True  # Ensure is_online is set on update
             plant_data[plant] = data
 
     try:
@@ -160,6 +165,8 @@ def broadcast_plants_status():
                 # Include all plants from settings, even if offline
                 for plant_ip in additional_plants:
                     resolved_ip = standardize_host_ip(plant_ip)
+                    plant_data_entry = plant_data.get(plant_ip, {})
+                    is_online = plant_data_entry.get('is_online', False) if plant_ip in plant_clients else False
                     if plant_ip in plant_data and plant_data[plant_ip].get('last_update'):
                         # Online plant with recent data
                         plant_data[plant_ip]['ip'] = resolved_ip or plant_ip  # Use resolved IP if available
@@ -189,7 +196,7 @@ def broadcast_plants_status():
                                 'drain_valve_ip': '',
                                 'drain_valve': ''
                             },
-                            'is_online': False  # Explicit flag for frontend
+                            'is_online': is_online  # Explicitly set based on connection
                         })
                 
                 current_data = aggregated
