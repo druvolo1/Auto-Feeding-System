@@ -10,7 +10,8 @@ debug_states = {
     'feed-flow': False,
     'drain-flow': False,
     'socket-connections': False,
-    'plants': False
+    'plants': False,
+    'dns-resolution': False  # Added to match the UI
 }
 
 SETTINGS_FILE = os.path.join(os.getcwd(), "data", "settings.json")
@@ -20,9 +21,12 @@ def load_debug_states():
         with open(SETTINGS_FILE, 'r') as f:
             settings = json.load(f)
             debug_settings = settings.get('debug_states', {})
-            for key in debug_states:
-                if key in debug_settings:
-                    debug_states[key] = debug_settings[key]
+            # Update debug_states with any keys from settings, defaulting to False if not in initial dict
+            for key, value in debug_settings.items():
+                if isinstance(value, bool):
+                    debug_states[key] = value
+                else:
+                    debug_states[key] = False  # Default to False for unknown keys with non-boolean values
 
 def save_debug_states():
     settings = {}
@@ -45,7 +49,9 @@ def toggle_debug():
     data = request.get_json() or {}
     component = data.get('component')
     enabled = data.get('enabled')
-    if component in debug_states and isinstance(enabled, bool):
+    if component and isinstance(enabled, bool):
+        if component not in debug_states:
+            debug_states[component] = False  # Add new component with default value
         debug_states[component] = enabled
         save_debug_states()  # Save on toggle
         return jsonify({"status": "success"})
