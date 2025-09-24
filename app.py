@@ -235,9 +235,8 @@ def broadcast_local_status():
                 'relay2_status': relay2_status,
                 'feed_level': feed_level
             }
+            print(f"[DEBUG] Emitting local_status_update: {data}")  # Added debug log
 
-            if debug_states.get('socket-connections', False):
-                print(f"[DEBUG] Emitting local_status_update: {data}")
             socketio.emit('local_status_update', data, namespace='/status')
             eventlet.sleep(1)
         except Exception as e:
