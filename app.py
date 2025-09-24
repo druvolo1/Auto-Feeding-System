@@ -4,7 +4,7 @@ eventlet.monkey_patch()
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 from flask_cors import CORS
-import socketio as sio module  # Renamed to avoid conflict
+import socketio as sio_module  # Renamed to avoid conflict
 from threading import Lock, Event
 import time
 import socket
@@ -106,7 +106,8 @@ def connect_to_remote_plant(plant):
             print(f"[ERROR] Failed to connect to {plant} at {ip}: {e}")
 
 def reload_plants():
-    if debug_states.get('plants', Falseоки
+    if debug_states.get('plants', False):
+        print("[DEBUG] Reloading plants...")
     settings = load_settings()
     additional_plants = settings.get('additional_plants', [])
     if debug_states.get('plants', False):
@@ -230,7 +231,7 @@ def start_threads():
         print("[INIT] Starting fresh flow reader thread...")
         eventlet.spawn(fresh_flow_reader)
         print("[INIT] Starting feed flow reader thread...")
-        eventlet.spawn(feed_flow_reader)
+        eventlet.spawn(fresh_flow_reader)
         print("[INIT] Starting drain flow reader thread...")
         eventlet.spawn(drain_flow_reader)
         print("[INIT] Starting broadcast thread...")
