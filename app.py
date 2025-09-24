@@ -141,12 +141,44 @@ def monitor_remote_plants():
 def broadcast_plants_status():
     while True:
         try:
+            settings = load_settings()
+            additional_plants = settings.get('additional_plants', [])
+            
             with plant_lock:
                 aggregated = {'plants': []}
                 
-                # Add remotes only
-                for plant, data in plant_data.items():
-                    aggregated['plants'].append(data)
+                # Include all plants from settings, even if offline
+                for plant_ip in additional_plants:
+                    if plant_ip in plant_data and plant_data[plant_ip].get('last_update'):
+                        # Online plant with recent data
+                        aggregated['plants'].append(plant_data[plant_ip])
+                    else:
+                        # Offline plant or no recent data
+                        aggregated['plants'].append({
+                            'ip': plant_ip,
+                            'system_name': plant_ip,
+                            'plant_name': 'Offline',
+                            'start_date': 'N/A',
+                            'settings': {
+                                'system_volume': 'N/A',
+                                'allow_remote_feeding': False,
+                                'plant_info': {}
+                            },
+                            'current_ph': None,
+                            'feeding_in_progress': False,
+                            'last_update': None,
+                            'water_level': {},
+                            'valve_info': {
+                                'fill_valve_label': '',
+                                'drain_valve_label': '',
+                                'valve_relays': {},
+                                'fill_valve_ip': '',
+                                'fill_valve': '',
+                                'drain_valve_ip': '',
+                                'drain_valve': ''
+                            },
+                            'is_online': False  # Explicit flag for frontend
+                        })
                 
                 current_data = aggregated
                 
@@ -158,8 +190,8 @@ def broadcast_plants_status():
         except Exception as e:
             if debug_states.get('plants', False):
                 print(f"[ERROR] Plants broadcast error: {e}")
+            eventlet.sleep(5)
 
-# Background tasks
 def broadcast_local_status():
     while True:
         try:
