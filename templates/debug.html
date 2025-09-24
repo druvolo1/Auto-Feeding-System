@@ -24,7 +24,10 @@
                     if (socketConnectionsCheckbox) socketConnectionsCheckbox.checked = data['socket-connections'];
 
                     const plantsCheckbox = document.getElementById('plants-debug');
-                    if (plantsCheckbox) plantsCheckbox.checked = data.plants;
+                    if (plantsCheckbox) plantsCheckbox.checked = data['plants'];
+
+                    const dnsResolutionCheckbox = document.getElementById('dns-resolution-debug');
+                    if (dnsResolutionCheckbox) dnsResolutionCheckbox.checked = data['dns-resolution'] || false;
                 })
                 .catch(error => console.error('Error loading debug states:', error));
         });
@@ -92,6 +95,11 @@
             <div class="checkbox-container">
                 <label>Plants</label>
                 <input type="checkbox" id="plants-debug" onchange="toggleDebug('plants')">
+            </div>
+
+            <div class="checkbox-container">
+                <label>DNS Resolution</label>
+                <input type="checkbox" id="dns-resolution-debug" onchange="toggleDebug('dns-resolution')">
             </div>
         </div>
     </main>

@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, render_template
 import api.fresh_flow
 import api.feed_flow
 import api.drain_flow
@@ -10,6 +10,8 @@ settings_blueprint = Blueprint('settings', __name__)
 @settings_blueprint.route('', methods=['GET'])
 def get_settings():
     settings = load_settings()
+    # Ensure debug_states exists and includes dns-resolution
+    settings.setdefault('debug_states', {}).setdefault('dns-resolution', False)
     return jsonify(settings)
 
 @settings_blueprint.route('', methods=['POST'])
@@ -33,6 +35,14 @@ def update_settings():
 
     if 'nutrient_concentration' in data:
         settings['nutrient_concentration'] = data['nutrient_concentration']
+
+    # Handle debug states, including dns-resolution
+    if 'debug_states' in data:
+        debug_states = settings.setdefault('debug_states', {})
+        for key, value in data['debug_states'].items():
+            if isinstance(value, bool):
+                debug_states[key] = value
+        settings['debug_states'] = debug_states
 
     save_settings(settings)
     
