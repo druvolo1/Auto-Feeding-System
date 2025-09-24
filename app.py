@@ -63,11 +63,11 @@ def connect_to_remote_plant(plant):
     ip = standardize_host_ip(plant)
     if not ip:
         if debug_states.get('socket-connections', False):
-            print(f"[ERROR] Name resolution failed for {plant}")
+            print(f"[ERROR] Name resolution failed for {plant}, resolved IP: {ip}")
         return
 
     if debug_states.get('socket-connections', False):
-        print(f"[DEBUG] Resolved {plant} to IP: {ip}")
+        print(f"[DEBUG] Resolved {plant} to IP: {ip} for connection")
 
     sio = sio_module.Client()
     plant_clients[plant] = sio
@@ -75,12 +75,12 @@ def connect_to_remote_plant(plant):
     @sio.event(namespace='/status')
     def connect():
         if debug_states.get('socket-connections', False):
-            print(f"[INFO] Connected to remote plant: {plant}")
+            print(f"[INFO] Connected to remote plant: {plant} at {ip}")
 
     @sio.event(namespace='/status')
     def disconnect():
         if debug_states.get('socket-connections', False):
-            print(f"[INFO] Disconnected from remote plant: {plant}")
+            print(f"[INFO] Disconnected from remote plant: {plant} at {ip}")
         with plant_lock:
             if plant in plant_data:
                 plant_data[plant]['last_update'] = None  # Mark as offline
@@ -88,7 +88,7 @@ def connect_to_remote_plant(plant):
     @sio.on('status_update', namespace='/status')
     def handle_status_update(data):
         if debug_states.get('plants', False):
-            print(f"[DEBUG] Received status_update from {plant}: {data}")
+            print(f"[DEBUG] Received status_update from {plant} at {ip}: {data}")
         with plant_lock:
             data['last_update'] = time.time() * 1000  # Milliseconds for JS
             data['ip'] = plant  # For identification (original hostname)
@@ -100,10 +100,10 @@ def connect_to_remote_plant(plant):
     try:
         sio.connect(f'http://{ip}:8000', namespaces=['/status'])
         if debug_states.get('socket-connections', False):
-            print(f"[DEBUG] Connect attempt to {plant} at {ip} initiated")
+            print(f"[DEBUG] Connect attempt to {plant} at {ip}:8000 succeeded")
     except Exception as e:
         if debug_states.get('socket-connections', False):
-            print(f"[ERROR] Failed to connect to {plant} at {ip}: {e}")
+            print(f"[ERROR] Failed to connect to {plant} at {ip}:8000: {str(e)}")
 
 def reload_plants():
     if debug_states.get('plants', False):
@@ -113,14 +113,21 @@ def reload_plants():
     if debug_states.get('plants', False):
         print(f"[DEBUG] Loaded additional_plants: {additional_plants}")
     
-    # Connect to new plants
+    # Normalize plant names to resolved IPs to avoid duplicates
+    normalized_plants = {}
     for plant in additional_plants:
-        if plant not in plant_clients:
+        ip = standardize_host_ip(plant)
+        if ip:
+            normalized_plants[ip] = plant  # Use IP as key, keep original name as value
+    
+    # Connect to unique plants
+    for ip, plant in normalized_plants.items():
+        if ip not in [standardize_host_ip(p) for p in plant_clients.keys()]:
             connect_to_remote_plant(plant)
     
     # Disconnect from removed plants
     for plant in list(plant_clients.keys()):
-        if plant not in additional_plants:
+        if standardize_host_ip(plant) not in [standardize_host_ip(p) for p in normalized_plants.values()]:
             plant_clients[plant].disconnect()
             del plant_clients[plant]
             with plant_lock:
@@ -231,7 +238,7 @@ def start_threads():
         print("[INIT] Starting fresh flow reader thread...")
         eventlet.spawn(fresh_flow_reader)
         print("[INIT] Starting feed flow reader thread...")
-        eventlet.spawn(fresh_flow_reader)
+        eventlet.spawn(feed_flow_reader)
         print("[INIT] Starting drain flow reader thread...")
         eventlet.spawn(drain_flow_reader)
         print("[INIT] Starting broadcast thread...")
