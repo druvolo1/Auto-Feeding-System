@@ -104,12 +104,30 @@
             feedPumpForm.addEventListener('submit', function(e) {
                 e.preventDefault();
                 const ip = document.getElementById('feed-pump-ip')?.value.trim();
-                const isKasa = document.getElementById('feed-pump-kasa')?.checked;
-                if (ip) {
+                const ioNumber = document.getElementById('feed-pump-io-number')?.value.trim();
+                const isIO = document.getElementById('feed-pump-io')?.checked;
+                const isShelly = document.getElementById('feed-pump-shelly')?.checked;
+                if (isIO && ioNumber) {
                     fetch('/api/settings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ feed_pump: { ip: ip, type: isKasa ? 'kasa' : 'shelly' } })
+                        body: JSON.stringify({ feed_pump: { io_number: ioNumber, type: 'io' } })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert('Feed pump settings saved successfully.');
+                                loadSettings();
+                            } else {
+                                alert('Failed to save feed pump settings: ' + data.error);
+                            }
+                        })
+                        .catch(error => console.error('Error saving feed pump settings:', error));
+                } else if (isShelly && ip) {
+                    fetch('/api/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ feed_pump: { ip: ip, type: 'shelly' } })
                     })
                         .then(response => response.json())
                         .then(data => {
@@ -122,7 +140,25 @@
                         })
                         .catch(error => console.error('Error saving feed pump settings:', error));
                 } else {
-                    alert('Please enter a valid IP address.');
+                    alert('Please enter a valid IP address for Shelly or IO number for IO.');
+                }
+            });
+        }
+
+        // Handle IO checkbox change
+        const ioCheckbox = document.getElementById('feed-pump-io');
+        const ipInput = document.getElementById('feed-pump-ip');
+        const shellyCheckbox = document.getElementById('feed-pump-shelly');
+        if (ioCheckbox && ipInput && shellyCheckbox) {
+            ioCheckbox.addEventListener('change', function() {
+                if (ioCheckbox.checked) {
+                    ipInput.value = ''; // Clear IP field
+                    ipInput.disabled = true;
+                    shellyCheckbox.checked = false;
+                    shellyCheckbox.disabled = true;
+                } else {
+                    ipInput.disabled = false;
+                    shellyCheckbox.disabled = false;
                 }
             });
         }
@@ -185,11 +221,20 @@
 
                 // Load feed pump settings
                 const feedPumpIp = document.getElementById('feed-pump-ip');
-                const feedPumpKasa = document.getElementById('feed-pump-kasa');
-                if (feedPumpIp && feedPumpKasa) {
+                const feedPumpIoNumber = document.getElementById('feed-pump-io-number');
+                const feedPumpIo = document.getElementById('feed-pump-io');
+                const feedPumpShelly = document.getElementById('feed-pump-shelly');
+                if (feedPumpIp && feedPumpIoNumber && feedPumpIo && feedPumpShelly) {
                     const feedPump = data.feed_pump || {};
                     feedPumpIp.value = feedPump.ip || '';
-                    feedPumpKasa.checked = feedPump.type === 'kasa';
+                    feedPumpIoNumber.value = feedPump.io_number || '';
+                    feedPumpIo.checked = feedPump.type === 'io';
+                    feedPumpShelly.checked = feedPump.type === 'shelly';
+                    if (feedPumpIo.checked) {
+                        feedPumpIp.disabled = true;
+                        feedPumpShelly.disabled = true;
+                        feedPumpShelly.checked = false;
+                    }
                 }
             })
             .catch(error => console.error('Error loading settings:', error));
@@ -537,8 +582,9 @@
                 </div>
                 <div class="calibration-row">
                     <label>Device Type:</label>
-                    <input type="checkbox" id="feed-pump-kasa" name="feed-pump-type" value="kasa">
-                    <label for="feed-pump-kasa">Kasa</label>
+                    <input type="checkbox" id="feed-pump-io" name="feed-pump-type" value="io">
+                    <label for="feed-pump-io">IO</label>
+                    <input type="text" id="feed-pump-io-number" placeholder="e.g., 17" style="margin-left: 10px; width: 60px;">
                     <input type="checkbox" id="feed-pump-shelly" name="feed-pump-type" value="shelly" disabled>
                     <label for="feed-pump-shelly">Shelly</label>
                     (Shelly support coming soon)

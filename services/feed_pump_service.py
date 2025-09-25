@@ -1,54 +1,49 @@
-import requests
-import json
+import RPi.GPIO as GPIO
 import logging
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-def control_feed_pump(ip, pump_type, state=None, get_status=False):
+# Global setup for GPIO (called once at module import)
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+def control_feed_pump(io_number=None, pump_type=None, state=None, get_status=False):
     """
-    Control or query the state of a Kasa or Shelly smart plug.
-    For now, only Kasa is implemented.
+    Control or query the state of a GPIO pin or Shelly smart plug.
+    For now, only IO is implemented.
     Args:
-        ip (str): IP address of the smart plug.
-        pump_type (str): 'kasa' or 'shelly'.
+        io_number (str): GPIO pin number (BCM) for IO control.
+        pump_type (str): 'io' or 'shelly'.
         state (int, optional): 1 to turn on, 0 to turn off. Omit for status query.
         get_status (bool): If True, return the current state instead of setting it.
     Returns:
         bool or int: True/False for control success, 1/0 for status (on/off).
     """
-    url = f"http://{ip}:9999"  # Kasa local API port
+    if pump_type != 'io':
+        raise ValueError("Only IO support is implemented currently")
 
-    if pump_type != 'kasa':
-        raise ValueError("Only Kasa support is implemented currently")
+    if not io_number or not io_number.isdigit():
+        logger.error("Invalid or missing IO number")
+        raise ValueError("IO number must be a valid integer")
+
+    pin = int(io_number)
+    GPIO.setup(pin, GPIO.OUT)  # Configure as output
 
     try:
         if get_status:
-            logger.debug(f"Querying status from {url}")
-            response = requests.post(url, json={"method": "get_sysinfo"}, timeout=5)
-            logger.debug(f"Status request response status: {response.status_code}")
-            if response.status_code == 200:
-                data = response.json()
-                logger.debug(f"Status response: {data}")
-                if data.get("error_code") == 0:
-                    return data["result"]["relay_state"]  # 1 = on, 0 = off
-            logger.error(f"Failed to get status: {response.status_code}, {response.text}")
-            return None  # Failed to get status
+            logger.debug(f"Querying status for GPIO pin {pin}")
+            current_state = GPIO.input(pin)
+            logger.debug(f"GPIO pin {pin} state: {current_state}")
+            return current_state  # 1 = on, 0 = off
 
-        payload = {"method": "set_relay_state", "params": {"state": state}}
-        logger.debug(f"Sending control request to {url} with payload: {payload}")
-        response = requests.post(url, json=payload, timeout=5)
-        logger.debug(f"Control request response status: {response.status_code}")
-        if response.status_code == 200:
-            data = response.json()
-            logger.debug(f"Control response: {data}")
-            return data.get("error_code") == 0  # True if successful
-        logger.error(f"Failed to control: {response.status_code}, {response.text}")
-        return False  # Failed to control
-    except requests.RequestException as e:
-        logger.error(f"Network error: {str(e)}")
+        logger.debug(f"Setting GPIO pin {pin} to state {state}")
+        GPIO.output(pin, state)  # Set the pin state
+        return True  # Assume success for now
+    except GPIO.error as e:
+        logger.error(f"GPIO error: {str(e)}")
         raise
-    except json.JSONDecodeError:
-        logger.error("Invalid response from device")
-        raise
+    finally:
+        # Cleanup is handled by the app if needed, but keep pin configured
+        pass

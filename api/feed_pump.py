@@ -8,14 +8,14 @@ feed_pump_blueprint = Blueprint('feed_pump', __name__)
 def turn_on_feed_pump():
     settings = load_settings()
     feed_pump = settings.get('feed_pump', {})
-    ip = feed_pump.get('ip')
-    pump_type = feed_pump.get('type', 'kasa')  # Default to 'kasa' if not set
+    io_number = feed_pump.get('io_number')
+    pump_type = feed_pump.get('type', 'io')  # Default to 'io' if not set
 
-    if not ip:
-        return jsonify({"status": "failure", "error": "Feed pump IP not configured"}), 400
+    if not io_number:
+        return jsonify({"status": "failure", "error": "Feed pump IO number not configured"}), 400
 
     try:
-        success = control_feed_pump(ip, pump_type, state=1)  # 1 for ON
+        success = control_feed_pump(io_number=io_number, pump_type=pump_type, state=1)  # 1 for ON
         if success:
             return jsonify({"status": "success"})
         else:
@@ -27,14 +27,14 @@ def turn_on_feed_pump():
 def turn_off_feed_pump():
     settings = load_settings()
     feed_pump = settings.get('feed_pump', {})
-    ip = feed_pump.get('ip')
-    pump_type = feed_pump.get('type', 'kasa')  # Default to 'kasa' if not set
+    io_number = feed_pump.get('io_number')
+    pump_type = feed_pump.get('type', 'io')  # Default to 'io' if not set
 
-    if not ip:
-        return jsonify({"status": "failure", "error": "Feed pump IP not configured"}), 400
+    if not io_number:
+        return jsonify({"status": "failure", "error": "Feed pump IO number not configured"}), 400
 
     try:
-        success = control_feed_pump(ip, pump_type, state=0)  # 0 for OFF
+        success = control_feed_pump(io_number=io_number, pump_type=pump_type, state=0)  # 0 for OFF
         if success:
             return jsonify({"status": "success"})
         else:
@@ -46,14 +46,14 @@ def turn_off_feed_pump():
 def get_feed_pump_status():
     settings = load_settings()
     feed_pump = settings.get('feed_pump', {})
-    ip = feed_pump.get('ip')
-    pump_type = feed_pump.get('type', 'kasa')  # Default to 'kasa' if not set
+    io_number = feed_pump.get('io_number')
+    pump_type = feed_pump.get('type', 'io')  # Default to 'io' if not set
 
-    if not ip:
-        return jsonify({"status": "failure", "error": "Feed pump IP not configured"}), 400
+    if not io_number:
+        return jsonify({"status": "failure", "error": "Feed pump IO number not configured"}), 400
 
     try:
-        status = control_feed_pump(ip, pump_type, get_status=True)
+        status = control_feed_pump(io_number=io_number, pump_type=pump_type, get_status=True)
         return jsonify({"status": "success", "state": status})
     except Exception as e:
         return jsonify({"status": "failure", "error": str(e)}), 500
