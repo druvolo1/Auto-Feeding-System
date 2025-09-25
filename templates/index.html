@@ -215,11 +215,11 @@
                 const cells = [
                     plant.system_name || 'Unknown',
                     plant.plant_name || 'N/A',
-                    plant.start_date || 'N/A',
-                    plant.settings?.system_volume || 'N/A',
-                    plant.current_ph !== null ? plant.current_ph : 'N/A',
-                    plant.feeding_in_progress ? 'Yes' : 'No',
-                    plant.settings?.allow_remote_feeding ? 'Yes' : 'No',
+                    plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.start_date || 'N/A'),
+                    plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.settings?.system_volume || 'N/A'),
+                    plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.current_ph !== null ? plant.current_ph : 'N/A'),
+                    plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.feeding_in_progress ? 'Yes' : 'No'),
+                    plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No'),
                     plant.last_update ? new Date(plant.last_update).toLocaleString() : 'Never'
                 ];
                 cells.forEach(text => {
@@ -231,7 +231,7 @@
                 // Water level sensors
                 sensorKeys.forEach(key => {
                     const sensor = plant.water_level?.[key] || {triggered: false};
-                    const status = sensor.triggered ? 'Not Present' : 'Present';
+                    const status = (plant.is_online === false || plant.is_online === undefined) ? 'Offline' : (sensor.triggered ? 'Not Present' : 'Present');
                     const td = document.createElement('td');
                     td.innerText = status;
                     row.appendChild(td);
@@ -240,8 +240,8 @@
                 // Valve statuses
                 const fillLabel = plant.valve_info?.fill_valve_label || "";
                 const drainLabel = plant.valve_info?.drain_valve_label || "";
-                const fillStatus = (plant.valve_info?.valve_relays?.[fillLabel]?.status || "N/A").toUpperCase();
-                const drainStatus = (plant.valve_info?.valve_relays?.[drainLabel]?.status || "N/A").toUpperCase();
+                const fillStatus = (plant.is_online === false || plant.is_online === undefined) ? 'Offline' : ((plant.valve_info?.valve_relays?.[fillLabel]?.status || "N/A").toUpperCase());
+                const drainStatus = (plant.is_online === false || plant.is_online === undefined) ? 'Offline' : ((plant.valve_info?.valve_relays?.[drainLabel]?.status || "N/A").toUpperCase());
                 [fillStatus, drainStatus].forEach(text => {
                     const td = document.createElement('td');
                     td.innerText = text;
