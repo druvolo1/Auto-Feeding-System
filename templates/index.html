@@ -160,7 +160,7 @@
         let lastUpdateCache = {}; // Cache to store last_update for offline plants
 
         socket.on('plants_update', function(data) {
-            console.log('Received plants_update:', data); // Debug log
+            console.log('Received plants_update:', data); // Debug log with full data
             const plantsTableBody = document.getElementById('plants-table').getElementsByTagName('tbody')[0];
             const thead = document.getElementById('plants-table').getElementsByTagName('thead')[0];
             plantsTableBody.innerHTML = ''; // Clear existing rows
@@ -203,7 +203,7 @@
             // Build rows in a fragment to batch DOM insertion
             const fragment = document.createDocumentFragment();
             data.plants.forEach(plant => {
-                console.log(`Processing plant ${plant.ip || 'local'}: is_online = ${plant.is_online}`); // Debug log
+                console.log(`Processing plant ${plant.ip || 'local'}: is_online = ${plant.is_online}, valve_relays = ${JSON.stringify(plant.valve_info?.valve_relays)}`); // Detailed debug
                 const row = document.createElement('tr');
 
                 const plantKey = plant.ip || 'local';
