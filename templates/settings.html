@@ -50,6 +50,14 @@
         h1, .subtitle {
             flex: 0 0 100%;
         }
+        .feed-pump-options {
+            display: flex;
+            align-items: center;
+        }
+        .feed-pump-options input[type="text"] {
+            width: 60px;
+            margin-left: 10px;
+        }
     </style>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -107,7 +115,8 @@
                 const ioNumber = document.getElementById('feed-pump-io-number')?.value.trim();
                 const isIO = document.getElementById('feed-pump-io')?.checked;
                 const isShelly = document.getElementById('feed-pump-shelly')?.checked;
-                if (isIO && ioNumber) {
+
+                if (isIO && ioNumber && !isShelly && !ip) {
                     fetch('/api/settings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -123,7 +132,7 @@
                             }
                         })
                         .catch(error => console.error('Error saving feed pump settings:', error));
-                } else if (isShelly && ip) {
+                } else if (isShelly && ip && !isIO && !ioNumber) {
                     fetch('/api/settings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -140,7 +149,7 @@
                         })
                         .catch(error => console.error('Error saving feed pump settings:', error));
                 } else {
-                    alert('Please enter a valid IP address for Shelly or IO number for IO.');
+                    alert('Please select either a valid IO number with IO checked or a valid IP address with Shelly checked. Only one option can be active.');
                 }
             });
         }
@@ -148,8 +157,9 @@
         // Handle IO checkbox change
         const ioCheckbox = document.getElementById('feed-pump-io');
         const ipInput = document.getElementById('feed-pump-ip');
+        const ioNumberInput = document.getElementById('feed-pump-io-number');
         const shellyCheckbox = document.getElementById('feed-pump-shelly');
-        if (ioCheckbox && ipInput && shellyCheckbox) {
+        if (ioCheckbox && ipInput && ioNumberInput && shellyCheckbox) {
             ioCheckbox.addEventListener('change', function() {
                 if (ioCheckbox.checked) {
                     ipInput.value = ''; // Clear IP field
@@ -159,6 +169,18 @@
                 } else {
                     ipInput.disabled = false;
                     shellyCheckbox.disabled = false;
+                }
+            });
+
+            shellyCheckbox.addEventListener('change', function() {
+                if (shellyCheckbox.checked) {
+                    ioNumberInput.value = ''; // Clear IO number field
+                    ioNumberInput.disabled = true;
+                    ioCheckbox.checked = false;
+                    ioCheckbox.disabled = true;
+                } else {
+                    ioNumberInput.disabled = false;
+                    ioCheckbox.disabled = false;
                 }
             });
         }
@@ -234,6 +256,10 @@
                         feedPumpIp.disabled = true;
                         feedPumpShelly.disabled = true;
                         feedPumpShelly.checked = false;
+                    } else if (feedPumpShelly.checked) {
+                        feedPumpIoNumber.disabled = true;
+                        feedPumpIo.disabled = true;
+                        feedPumpIo.checked = false;
                     }
                 }
             })
@@ -580,11 +606,10 @@
                     <label>IP Address:</label>
                     <input type="text" id="feed-pump-ip" placeholder="e.g., 192.168.1.100">
                 </div>
-                <div class="calibration-row">
-                    <label>Device Type:</label>
+                <div class="calibration-row feed-pump-options">
                     <input type="checkbox" id="feed-pump-io" name="feed-pump-type" value="io">
                     <label for="feed-pump-io">IO</label>
-                    <input type="text" id="feed-pump-io-number" placeholder="e.g., 17" style="margin-left: 10px; width: 60px;">
+                    <input type="text" id="feed-pump-io-number" placeholder="e.g., 17" style="margin-left: 5px; width: 60px;">
                     <input type="checkbox" id="feed-pump-shelly" name="feed-pump-type" value="shelly" disabled>
                     <label for="feed-pump-shelly">Shelly</label>
                     (Shelly support coming soon)
