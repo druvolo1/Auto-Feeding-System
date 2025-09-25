@@ -126,6 +126,29 @@
                 }
             });
         }
+
+        // Handle feed pump on/off buttons
+        document.getElementById('feed-pump-on')?.addEventListener('click', function() {
+            fetch('/api/feed_pump/on', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        console.error('Failed to turn on feed pump:', data.error);
+                    }
+                })
+                .catch(error => console.error('Error turning on feed pump:', error));
+        });
+
+        document.getElementById('feed-pump-off')?.addEventListener('click', function() {
+            fetch('/api/feed_pump/off', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        console.error('Failed to turn off feed pump:', data.error);
+                    }
+                })
+                .catch(error => console.error('Error turning off feed pump:', error));
+        });
     });
 
     function loadSettings() {
@@ -180,6 +203,9 @@
                     feedPumpIp.value = feedPump.ip || '';
                     feedPumpKasa.checked = feedPump.type === 'kasa';
                 }
+
+                // Load feed pump status for button states (optional, add if needed later)
+                // For now, buttons will rely on API calls without pre-loading status
             })
             .catch(error => console.error('Error loading settings:', error));
     }
@@ -372,6 +398,21 @@
             offButton.classList.add('active');
         }
     }
+
+    // Function to update feed pump button states (optional, add later if status is broadcasted)
+    function updateFeedPumpButton(status) {
+        const onButton = document.getElementById('feed-pump-on');
+        const offButton = document.getElementById('feed-pump-off');
+        if (onButton && offButton) {
+            if (status === 'on') {
+                onButton.classList.add('active');
+                offButton.classList.remove('active');
+            } else {
+                onButton.classList.remove('active');
+                offButton.classList.add('active');
+            }
+        }
+    }
 </script>
 </head>
 <body>
@@ -494,6 +535,9 @@
                 </div>
                 <button type="submit">Save Feed Pump Settings</button>
             </form>
+            <br>
+            <button id="feed-pump-on" class="small-btn relay-button" onclick="turnOnFeedPump()">On</button>
+            <button id="feed-pump-off" class="small-btn relay-button" onclick="turnOffFeedPump()">Off</button>
         </div>
 
     </main>

@@ -44,6 +44,17 @@ def update_settings():
                 debug_states[key] = value
         settings['debug_states'] = debug_states
 
+    # Handle feed pump settings
+    if 'feed_pump' in data:
+        feed_pump = data['feed_pump']
+        if 'ip' in feed_pump and isinstance(feed_pump.get('type'), str):
+            settings['feed_pump'] = {
+                'ip': feed_pump['ip'],
+                'type': feed_pump['type']
+            }
+        else:
+            return jsonify({"status": "failure", "error": "Invalid feed pump configuration"}), 400
+
     save_settings(settings)
     
     if plants_changed:
