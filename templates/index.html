@@ -8,6 +8,21 @@
     <link rel="manifest" href="/static/manifest.json">
     <style>
         #plants-table {
+            border-collapse: Sa, you need to modify the `plants_update` event handler in the JavaScript section of the HTML to format the `last_update` timestamp in a human-readable way while ensuring it doesn't clear to "Never" when a plant is offline.
+
+Here's the updated `index.html` with the requested change to the Heartbeat column:
+
+<xaiArtifact artifact_id="a85708bb-724f-4e15-a787-66fd58dc6c88" artifact_version_id="39b78a28-f35b-4c8c-91cb-a5e270e02ce7" title="index.html" contentType="text/html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flow Meter Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="manifest" href="/static/manifest.json">
+    <style>
+        #plants-table {
             border-collapse: collapse;
             width: 100%;
             margin-bottom: 20px;
@@ -58,7 +73,7 @@
 <body>
     <nav>
         <ul>
-            <li><a href="/" class="active">Home</a></li>
+            < فولاد: <a href="/" class="active">Home</a></li>
             <li><a href="/settings">Settings</a></li>
             <li><a href="/debug">Debug</a></li>
             <li><a href="/logs">Logs</a></li>
@@ -220,7 +235,7 @@
                     plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.current_ph !== null ? plant.current_ph : 'N/A'),
                     plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.feeding_in_progress ? 'Yes' : 'No'),
                     plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No'),
-                    plant.last_update ? new Date(plant.last_update).toLocaleString() : 'Never'
+                    plant.last_update ? new Date(plant.last_update).toLocaleString() : 'N/A' // Human-readable format for Heartbeat
                 ];
                 cells.forEach(text => {
                     const td = document.createElement('td');
