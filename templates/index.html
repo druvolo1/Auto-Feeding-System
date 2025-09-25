@@ -8,21 +8,6 @@
     <link rel="manifest" href="/static/manifest.json">
     <style>
         #plants-table {
-            border-collapse: Sa, you need to modify the `plants_update` event handler in the JavaScript section of the HTML to format the `last_update` timestamp in a human-readable way while ensuring it doesn't clear to "Never" when a plant is offline.
-
-Here's the updated `index.html` with the requested change to the Heartbeat column:
-
-<xaiArtifact artifact_id="a85708bb-724f-4e15-a787-66fd58dc6c88" artifact_version_id="39b78a28-f35b-4c8c-91cb-a5e270e02ce7" title="index.html" contentType="text/html">
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Flow Meter Monitor</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="manifest" href="/static/manifest.json">
-    <style>
-        #plants-table {
             border-collapse: collapse;
             width: 100%;
             margin-bottom: 20px;
@@ -73,7 +58,7 @@ Here's the updated `index.html` with the requested change to the Heartbeat colum
 <body>
     <nav>
         <ul>
-            < فولاد: <a href="/" class="active">Home</a></li>
+            <li><a href="/" class="active">Home</a></li>
             <li><a href="/settings">Settings</a></li>
             <li><a href="/debug">Debug</a></li>
             <li><a href="/logs">Logs</a></li>
@@ -108,7 +93,7 @@ Here's the updated `index.html` with the requested change to the Heartbeat colum
         </div>
 
         <h2>Plants</h2>
-        <table id="plants-table" style="width: 100%; border-collapse: collapse;">
+        <table id="plants-table">
             <thead>
                 <!-- Dynamically populated by JS -->
             </thead>
@@ -172,6 +157,7 @@ Here's the updated `index.html` with the requested change to the Heartbeat colum
         });
 
         let headersSet = false; // Flag to track if headers are initialized
+        let lastUpdateCache = {}; // Cache to store last_update for offline plants
 
         socket.on('plants_update', function(data) {
             console.log('Received plants_update:', data); // Debug log
@@ -220,22 +206,33 @@ Here's the updated `index.html` with the requested change to the Heartbeat colum
                 console.log(`Processing plant ${plant.ip || 'local'}: is_online = ${plant.is_online}`); // Debug log
                 const row = document.createElement('tr');
 
+                const plantKey = plant.ip || 'local';
+                const isOffline = plant.is_online === false || plant.is_online === undefined;
+
+                // Cache the last_update if online
+                if (!isOffline && plant.last_update) {
+                    lastUpdateCache[plantKey] = plant.last_update;
+                }
+
+                // Use cached last_update if offline and no current last_update
+                const effectiveLastUpdate = plant.last_update || lastUpdateCache[plantKey];
+
                 // Apply disconnected class only if plant is explicitly offline or undefined
-                if (plant.is_online === false || plant.is_online === undefined) {
+                if (isOffline) {
                     row.classList.add('disconnected');
-                    console.warn(`Plant ${plant.ip || 'local'} is offline or has undefined is_online`);
+                    console.warn(`Plant ${plantKey} is offline or has undefined is_online`);
                 }
 
                 // Add cells
                 const cells = [
                     plant.system_name || 'Unknown',
                     plant.plant_name || 'N/A',
-                    plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.start_date || 'N/A'),
-                    plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.settings?.system_volume || 'N/A'),
-                    plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.current_ph !== null ? plant.current_ph : 'N/A'),
-                    plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.feeding_in_progress ? 'Yes' : 'No'),
-                    plant.is_online === false || plant.is_online === undefined ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No'),
-                    plant.last_update ? new Date(plant.last_update).toLocaleString() : 'N/A' // Human-readable format for Heartbeat
+                    isOffline ? 'Offline' : (plant.start_date || 'N/A'),
+                    isOffline ? 'Offline' : (plant.settings?.system_volume || 'N/A'),
+                    isOffline ? 'Offline' : (plant.current_ph !== null ? plant.current_ph : 'N/A'),
+                    isOffline ? 'Offline' : (plant.feeding_in_progress ? 'Yes' : 'No'),
+                    isOffline ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No'),
+                    effectiveLastUpdate ? new Date(effectiveLastUpdate).toLocaleString() : 'N/A' // Human-readable format for Heartbeat
                 ];
                 cells.forEach(text => {
                     const td = document.createElement('td');
@@ -246,7 +243,7 @@ Here's the updated `index.html` with the requested change to the Heartbeat colum
                 // Water level sensors
                 sensorKeys.forEach(key => {
                     const sensor = plant.water_level?.[key] || {triggered: false};
-                    const status = (plant.is_online === false || plant.is_online === undefined) ? 'Offline' : (sensor.triggered ? 'Not Present' : 'Present');
+                    const status = isOffline ? 'Offline' : (sensor.triggered ? 'Not Present' : 'Present');
                     const td = document.createElement('td');
                     td.innerText = status;
                     row.appendChild(td);
@@ -255,8 +252,8 @@ Here's the updated `index.html` with the requested change to the Heartbeat colum
                 // Valve statuses
                 const fillLabel = plant.valve_info?.fill_valve_label || "";
                 const drainLabel = plant.valve_info?.drain_valve_label || "";
-                const fillStatus = (plant.is_online === false || plant.is_online === undefined) ? 'Offline' : ((plant.valve_info?.valve_relays?.[fillLabel]?.status || "N/A").toUpperCase());
-                const drainStatus = (plant.is_online === false || plant.is_online === undefined) ? 'Offline' : ((plant.valve_info?.valve_relays?.[drainLabel]?.status || "N/A").toUpperCase());
+                const fillStatus = isOffline ? 'Offline' : ((plant.valve_info?.valve_relays?.[fillLabel]?.status || "N/A").toUpperCase());
+                const drainStatus = isOffline ? 'Offline' : ((plant.valve_info?.valve_relays?.[drainLabel]?.status || "N/A").toUpperCase());
                 [fillStatus, drainStatus].forEach(text => {
                     const td = document.createElement('td');
                     td.innerText = text;
@@ -266,7 +263,7 @@ Here's the updated `index.html` with the requested change to the Heartbeat colum
                 // Hidden valve info
                 const hiddenDiv = document.createElement('div');
                 hiddenDiv.style.display = 'none';
-                hiddenDiv.id = `valve-info-${plant.ip || 'local'}`;
+                hiddenDiv.id = `valve-info-${plantKey}`;
                 hiddenDiv.innerText = `Fill IP: ${plant.valve_info?.fill_valve_ip || ''}, Fill Valve: ${plant.valve_info?.fill_valve || ''}, Drain IP: ${plant.valve_info?.drain_valve_ip || ''}, Drain Valve: ${plant.valve_info?.drain_valve || ''}`;
                 row.appendChild(hiddenDiv);
 
