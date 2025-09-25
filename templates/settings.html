@@ -56,7 +56,7 @@
         }
         .feed-pump-options input[type="text"] {
             width: 60px;
-            margin-left: 10px;
+            margin-left: 5px;
         }
     </style>
     <script>
@@ -185,15 +185,28 @@
             });
         }
 
-        // Handle feed pump on/off buttons
+        // Handle feed pump on/off buttons with debounce
+        let lastClickTime = 0;
+        const debounceTime = 500; // 500ms debounce
+
         const feedPumpOnButton = document.getElementById('feed-pump-on');
         if (feedPumpOnButton) {
-            feedPumpOnButton.addEventListener('click', turnOnFeedPump);
+            feedPumpOnButton.addEventListener('click', function(e) {
+                const now = Date.now();
+                if (now - lastClickTime < debounceTime) return;
+                lastClickTime = now;
+                turnOnFeedPump();
+            });
         }
 
         const feedPumpOffButton = document.getElementById('feed-pump-off');
         if (feedPumpOffButton) {
-            feedPumpOffButton.addEventListener('click', turnOffFeedPump);
+            feedPumpOffButton.addEventListener('click', function(e) {
+                const now = Date.now();
+                if (now - lastClickTime < debounceTime) return;
+                lastClickTime = now;
+                turnOffFeedPump();
+            });
         }
     });
 
