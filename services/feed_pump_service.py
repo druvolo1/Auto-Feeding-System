@@ -27,9 +27,10 @@ def control_feed_pump(ip, pump_type, state=None, get_status=False):
         if get_status:
             logger.debug(f"Querying status from {url}")
             response = requests.post(url, json={"method": "get_sysinfo"}, timeout=5)
+            logger.debug(f"Status request response status: {response.status_code}")
             if response.status_code == 200:
                 data = response.json()
-                logger.debug(f"Response: {data}")
+                logger.debug(f"Status response: {data}")
                 if data.get("error_code") == 0:
                     return data["result"]["relay_state"]  # 1 = on, 0 = off
             logger.error(f"Failed to get status: {response.status_code}, {response.text}")
@@ -38,6 +39,7 @@ def control_feed_pump(ip, pump_type, state=None, get_status=False):
         payload = {"method": "set_relay_state", "params": {"state": state}}
         logger.debug(f"Sending control request to {url} with payload: {payload}")
         response = requests.post(url, json=payload, timeout=5)
+        logger.debug(f"Control request response status: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
             logger.debug(f"Control response: {data}")
