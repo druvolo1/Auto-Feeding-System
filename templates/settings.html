@@ -97,6 +97,35 @@
                 }
             });
         }
+
+        // Handle feed pump form submit
+        const feedPumpForm = document.getElementById('feed-pump-form');
+        if (feedPumpForm) {
+            feedPumpForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const ip = document.getElementById('feed-pump-ip')?.value.trim();
+                const isKasa = document.getElementById('feed-pump-kasa')?.checked;
+                if (ip) {
+                    fetch('/api/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ feed_pump: { ip: ip, type: isKasa ? 'kasa' : 'shelly' } })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert('Feed pump settings saved successfully.');
+                                loadSettings();
+                            } else {
+                                alert('Failed to save feed pump settings: ' + data.error);
+                            }
+                        })
+                        .catch(error => console.error('Error saving feed pump settings:', error));
+                } else {
+                    alert('Please enter a valid IP address.');
+                }
+            });
+        }
     });
 
     function loadSettings() {
@@ -142,6 +171,15 @@
 
                 // Load relay statuses
                 loadRelayStatuses();
+
+                // Load feed pump settings
+                const feedPumpIp = document.getElementById('feed-pump-ip');
+                const feedPumpKasa = document.getElementById('feed-pump-kasa');
+                if (feedPumpIp && feedPumpKasa) {
+                    const feedPump = data.feed_pump || {};
+                    feedPumpIp.value = feedPump.ip || '';
+                    feedPumpKasa.checked = feedPump.type === 'kasa';
+                }
             })
             .catch(error => console.error('Error loading settings:', error));
     }
@@ -340,7 +378,7 @@
     <nav>
         <ul>
             <li><a href="/">Home</a></li>
-            <li><a href="/settings"class="active">Settings</a></li>
+            <li><a href="/settings" class="active">Settings</a></li>
             <li><a href="/debug">Debug</a></li>
             <li><a href="/logs">Logs</a></li>
         </ul>
@@ -438,7 +476,25 @@
             </div>
         </div>
 
-        <!-- Add more sections as needed for other settings -->
+        <!-- Nutrient Feed Pump Section -->
+        <div class="data-container">
+            <h3>Nutrient Feed Pump</h3>
+            <form id="feed-pump-form">
+                <div class="calibration-row">
+                    <label>IP Address:</label>
+                    <input type="text" id="feed-pump-ip" placeholder="e.g., 192.168.1.100">
+                </div>
+                <div class="calibration-row">
+                    <label>Device Type:</label>
+                    <input type="checkbox" id="feed-pump-kasa" name="feed-pump-type" value="kasa">
+                    <label for="feed-pump-kasa">Kasa</label>
+                    <input type="checkbox" id="feed-pump-shelly" name="feed-pump-type" value="shelly" disabled>
+                    <label for="feed-pump-shelly">Shelly</label>
+                    (Shelly support coming soon)
+                </div>
+                <button type="submit">Save Feed Pump Settings</button>
+            </form>
+        </div>
 
     </main>
 </body>

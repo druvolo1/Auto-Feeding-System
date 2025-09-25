@@ -18,6 +18,7 @@ from api.debug import debug_blueprint, debug_states
 from api.logs import log_blueprint
 from api.valve_relay import valve_relay_blueprint
 from api.feed_level import feed_level_blueprint
+from api.feed_pump import feed_pump_blueprint  # New blueprint
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
@@ -52,6 +53,7 @@ app.register_blueprint(debug_blueprint, url_prefix='/debug')
 app.register_blueprint(log_blueprint, url_prefix='/api/logs')
 app.register_blueprint(valve_relay_blueprint, url_prefix='/api/valve_relay')
 app.register_blueprint(feed_level_blueprint, url_prefix='/api/feed_level')
+app.register_blueprint(feed_pump_blueprint, url_prefix='/api/feed_pump')  # Register new blueprint
 
 # Shared state for remote plants
 plant_data = {}  # { 'plant_ip': {...} }
