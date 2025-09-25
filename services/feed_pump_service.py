@@ -1,5 +1,10 @@
 import requests
 import json
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def control_feed_pump(ip, pump_type, state=None, get_status=False):
     """
@@ -20,20 +25,28 @@ def control_feed_pump(ip, pump_type, state=None, get_status=False):
 
     try:
         if get_status:
-            response = requests.post(url, json={"method": "get_sysinfo"})
+            logger.debug(f"Querying status from {url}")
+            response = requests.post(url, json={"method": "get_sysinfo"}, timeout=5)
             if response.status_code == 200:
                 data = response.json()
+                logger.debug(f"Response: {data}")
                 if data.get("error_code") == 0:
                     return data["result"]["relay_state"]  # 1 = on, 0 = off
+            logger.error(f"Failed to get status: {response.status_code}, {response.text}")
             return None  # Failed to get status
 
         payload = {"method": "set_relay_state", "params": {"state": state}}
-        response = requests.post(url, json=payload)
+        logger.debug(f"Sending control request to {url} with payload: {payload}")
+        response = requests.post(url, json=payload, timeout=5)
         if response.status_code == 200:
             data = response.json()
+            logger.debug(f"Control response: {data}")
             return data.get("error_code") == 0  # True if successful
+        logger.error(f"Failed to control: {response.status_code}, {response.text}")
         return False  # Failed to control
     except requests.RequestException as e:
-        raise Exception(f"Network error: {str(e)}")
+        logger.error(f"Network error: {str(e)}")
+        raise
     except json.JSONDecodeError:
-        raise Exception("Invalid response from device")
+        logger.error("Invalid response from device")
+        raise

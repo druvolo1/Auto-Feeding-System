@@ -128,27 +128,15 @@
         }
 
         // Handle feed pump on/off buttons
-        document.getElementById('feed-pump-on')?.addEventListener('click', function() {
-            fetch('/api/feed_pump/on', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status !== 'success') {
-                        console.error('Failed to turn on feed pump:', data.error);
-                    }
-                })
-                .catch(error => console.error('Error turning on feed pump:', error));
-        });
+        const feedPumpOnButton = document.getElementById('feed-pump-on');
+        if (feedPumpOnButton) {
+            feedPumpOnButton.addEventListener('click', turnOnFeedPump);
+        }
 
-        document.getElementById('feed-pump-off')?.addEventListener('click', function() {
-            fetch('/api/feed_pump/off', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status !== 'success') {
-                        console.error('Failed to turn off feed pump:', data.error);
-                    }
-                })
-                .catch(error => console.error('Error turning off feed pump:', error));
-        });
+        const feedPumpOffButton = document.getElementById('feed-pump-off');
+        if (feedPumpOffButton) {
+            feedPumpOffButton.addEventListener('click', turnOffFeedPump);
+        }
     });
 
     function loadSettings() {
@@ -203,9 +191,6 @@
                     feedPumpIp.value = feedPump.ip || '';
                     feedPumpKasa.checked = feedPump.type === 'kasa';
                 }
-
-                // Load feed pump status for button states (optional, add if needed later)
-                // For now, buttons will rely on API calls without pre-loading status
             })
             .catch(error => console.error('Error loading settings:', error));
     }
@@ -399,7 +384,32 @@
         }
     }
 
-    // Function to update feed pump button states (optional, add later if status is broadcasted)
+    function turnOnFeedPump() {
+        fetch('/api/feed_pump/on', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    console.error('Failed to turn on feed pump:', data.error);
+                } else {
+                    updateFeedPumpButton('on'); // Update button state on success
+                }
+            })
+            .catch(error => console.error('Error turning on feed pump:', error));
+    }
+
+    function turnOffFeedPump() {
+        fetch('/api/feed_pump/off', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    console.error('Failed to turn off feed pump:', data.error);
+                } else {
+                    updateFeedPumpButton('off'); // Update button state on success
+                }
+            })
+            .catch(error => console.error('Error turning off feed pump:', error));
+    }
+
     function updateFeedPumpButton(status) {
         const onButton = document.getElementById('feed-pump-on');
         const offButton = document.getElementById('feed-pump-off');
