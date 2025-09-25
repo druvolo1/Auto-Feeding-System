@@ -47,11 +47,19 @@ def update_settings():
     # Handle feed pump settings
     if 'feed_pump' in data:
         feed_pump = data['feed_pump']
-        if 'ip' in feed_pump and isinstance(feed_pump.get('type'), str):
-            settings['feed_pump'] = {
-                'ip': feed_pump['ip'],
-                'type': feed_pump['type']
-            }
+        if isinstance(feed_pump.get('type'), str):
+            if feed_pump['type'] == 'io' and 'io_number' in feed_pump and feed_pump['io_number'].isdigit():
+                settings['feed_pump'] = {
+                    'io_number': feed_pump['io_number'],
+                    'type': feed_pump['type']
+                }
+            elif feed_pump['type'] == 'shelly' and 'ip' in feed_pump:
+                settings['feed_pump'] = {
+                    'ip': feed_pump['ip'],
+                    'type': feed_pump['type']
+                }
+            else:
+                return jsonify({"status": "failure", "error": "Invalid feed pump configuration"}), 400
         else:
             return jsonify({"status": "failure", "error": "Invalid feed pump configuration"}), 400
 
