@@ -61,6 +61,19 @@
             cursor: not-allowed;
             opacity: 0.5;
         }
+        #feeding-feedback {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #1e1e1e;
+            border: 1px solid #ddd;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.9em;
+        }
+        #feeding-feedback p {
+            margin: 5px 0;
+            color: #fff;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
 </head>
@@ -113,6 +126,9 @@
         <div id="feeding-controls">
             <button id="start-all-feeding" class="feeding-button" onclick="startAllFeeding()">Start All Feeding</button>
             <button id="stop-all-feeding" class="feeding-button" onclick="stopAllFeeding()">Stop All Feeding</button>
+        </div>
+        <div id="feeding-feedback">
+            <!-- Feedback messages will be appended here -->
         </div>
 
         <p id="last-updated" class="last-updated">Last updated: Never</p>
@@ -169,26 +185,35 @@
             document.getElementById('last-updated').innerText = `Last updated: ${now.toLocaleString()}`;
         });
 
+        socket.on('feeding_feedback', function(data) {
+            const feedbackContainer = document.getElementById('feeding-feedback');
+            const message = document.createElement('p');
+            message.innerText = `[${new Date(data.timestamp).toLocaleString()}] ${data.message}`;
+            feedbackContainer.prepend(message); // Prepend to show newest messages at the top
+            // Limit to 50 messages to prevent DOM bloat
+            while (feedbackContainer.children.length > 50) {
+                feedbackContainer.removeChild(feedbackContainer.lastChild);
+            }
+        });
+
         let headersSet = false;
         let lastUpdateCache = {};
-        let plantsData = []; // Store plants data for button logic
+        let plantsData = [];
 
         socket.on('plants_update', function(data) {
             console.log('Received plants_update:', data);
             const plantsTableBody = document.getElementById('plants-table').getElementsByTagName('tbody')[0];
             const thead = document.getElementById('plants-table').getElementsByTagName('thead')[0];
             plantsTableBody.innerHTML = '';
-            plantsData = data.plants || []; // Store for button logic
+            plantsData = data.plants || [];
 
             if (!data.plants || data.plants.length === 0) {
                 console.log('No plants data received');
-                // Disable both buttons if no plants
                 document.getElementById('start-all-feeding').disabled = true;
                 document.getElementById('stop-all-feeding').disabled = true;
                 return;
             }
 
-            // Dynamically determine sensor columns on every update
             let sensorKeys = [];
             let sensorHeaders = [];
             const firstOnlinePlant = data.plants.find(plant => plant.is_online === true) || data.plants[0];
@@ -198,7 +223,6 @@
                 sensorHeaders = sensorKeys.map(key => firstPlantWaterLevels[key]?.label || key);
             }
 
-            // Update headers if sensorKeys have changed or on first load
             if (!headersSet || sensorKeys.length > 0) {
                 thead.innerHTML = `
                     <tr>
@@ -218,7 +242,6 @@
                 headersSet = true;
             }
 
-            // Build rows in a fragment to batch DOM insertion
             const fragment = document.createDocumentFragment();
             data.plants.forEach(plant => {
                 console.log(`Processing plant ${plant.ip || 'local'}: is_online = ${plant.is_online}, valve_relays = ${JSON.stringify(plant.valve_info?.valve_relays)}`);
@@ -227,21 +250,17 @@
                 const plantKey = plant.ip || 'local';
                 const isOffline = plant.is_online === false || plant.is_online === undefined;
 
-                // Cache the last_update if online
                 if (!isOffline && plant.last_update) {
                     lastUpdateCache[plantKey] = plant.last_update;
                 }
 
-                // Use cached last_update if offline and no current last_update
                 const effectiveLastUpdate = plant.last_update || lastUpdateCache[plantKey];
 
-                // Apply disconnected class only if plant is explicitly offline or undefined
                 if (isOffline) {
                     row.classList.add('disconnected');
                     console.warn(`Plant ${plantKey} is offline or has undefined is_online`);
                 }
 
-                // Add cells
                 const cells = [
                     plant.system_name || 'Unknown',
                     plant.plant_name || 'N/A',
@@ -258,7 +277,6 @@
                     row.appendChild(td);
                 });
 
-                // Water level sensors
                 sensorKeys.forEach(key => {
                     const sensor = plant.water_level?.[key] || {triggered: false};
                     const status = isOffline ? 'Offline' : (sensor.triggered ? 'Not Present' : 'Present');
@@ -267,7 +285,6 @@
                     row.appendChild(td);
                 });
 
-                // Valve statuses
                 const fillLabel = plant.valve_info?.fill_valve_label || "";
                 const drainLabel = plant.valve_info?.drain_valve_label || "";
                 const fillStatus = isOffline ? 'Offline' : ((plant.valve_info?.valve_relays?.[fillLabel]?.status || "N/A").toUpperCase());
@@ -278,7 +295,6 @@
                     row.appendChild(td);
                 });
 
-                // Hidden valve info
                 const hiddenDiv = document.createElement('div');
                 hiddenDiv.style.display = 'none';
                 hiddenDiv.id = `valve-info-${plantKey}`;
@@ -290,7 +306,6 @@
 
             plantsTableBody.appendChild(fragment);
 
-            // Update button states
             const startButton = document.getElementById('start-all-feeding');
             const stopButton = document.getElementById('stop-all-feeding');
             const canStart = plantsData.some(plant => plant.is_online && plant.settings?.allow_remote_feeding && !plant.feeding_in_progress);
