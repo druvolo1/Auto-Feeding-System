@@ -80,31 +80,38 @@ def wait_for_valve_off(plant_ip, valve_ip, valve_id, valve_label, timeout=30):
     return False
 
 def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retries=2):
-    """Wait for a water level sensor to reach the expected triggered state."""
+    """Wait for a water level sensor to reach the expected triggered state, requiring a state change."""
     with current_app.config['plant_lock']:
         plant_data = current_app.config['plant_data']
         sensor_label = plant_data.get(plant_ip, {}).get('water_level', {}).get(sensor_key, {}).get('label', sensor_key)
+        initial_triggered = plant_data.get(plant_ip, {}).get('water_level', {}).get(sensor_key, {}).get('triggered', 'unknown')
+    log_feeding_feedback(f"Initial state for sensor {sensor_label} (triggered={initial_triggered}) for plant {plant_ip}", plant_ip, status='info')
+
     for attempt in range(retries):
-        log_feeding_feedback(f"Starting sensor wait for {sensor_label} (triggered={expected_triggered}, attempt {attempt+1}/{retries}) for plant {plant_ip}", plant_ip, status='info')
+        log_feeding_feedback(f"Starting sensor wait for {sensor_label} (expected={expected_triggered}, attempt {attempt+1}/{retries}) for plant {plant_ip}", plant_ip, status='info')
         start_time = time.time()
         counter = 0
+        state_changed = False
         while time.time() - start_time < timeout:
             if stop_feeding_flag:
                 log_feeding_feedback(f"Feeding interrupted by user for plant {plant_ip}", plant_ip, status='error')
                 return False
             with current_app.config['plant_lock']:
                 plant_data = current_app.config['plant_data']
-                if plant_ip in plant_data and plant_data[plant_ip].get('water_level', {}).get(sensor_key, {}).get('triggered') == expected_triggered:
-                    log_feeding_feedback(f"Sensor {sensor_label} reached expected state (triggered={expected_triggered}) for plant {plant_ip}", plant_ip, status='success')
+                current_triggered = plant_data.get(plant_ip, {}).get('water_level', {}).get(sensor_key, {}).get('triggered', 'unknown')
+                if plant_ip in plant_data and current_triggered == expected_triggered and current_triggered != initial_triggered:
+                    state_changed = True
+                    log_feeding_feedback(f"Sensor {sensor_label} reached expected state (triggered={expected_triggered}) after change from {initial_triggered} for plant {plant_ip}", plant_ip, status='success')
                     return True
-            time.sleep(1)  # Blocking sleep to ensure sequential processing
+            time.sleep(1)
             counter += 1
             if counter % 5 == 0:
                 log_feeding_feedback(f"Current status for sensor {sensor_label}: triggered={current_triggered}", plant_ip, status='info')
-        log_feeding_feedback(f"Timeout waiting for sensor {sensor_label} to reach triggered={expected_triggered} for plant {plant_ip} (attempt {attempt+1}/{retries})", plant_ip, status='warning')
+        if not state_changed:
+            log_feeding_feedback(f"Timeout waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} (attempt {attempt+1}/{retries})", plant_ip, status='warning')
         if attempt < retries - 1:
-            time.sleep(5)  # Wait before retrying
-    log_feeding_feedback(f"Failed waiting for sensor {sensor_label} to reach triggered={expected_triggered} for plant {plant_ip} after {retries} attempts", plant_ip, status='error')
+            time.sleep(5)
+    log_feeding_feedback(f"Failed waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} after {retries} attempts", plant_ip, status='error')
     return False
 
 def start_feeding_sequence():
@@ -161,16 +168,13 @@ def start_feeding_sequence():
 
         # Set feeding_in_progress
         try:
-            # Emit start_feeding for remote state
             plant_clients[plant_ip].emit('start_feeding', namespace='/status')
-            # Call API to set feeding_in_progress
             response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": True}, timeout=5)
             response.raise_for_status()
             log_feeding_feedback(f"Set feeding_in_progress for plant {plant_ip}", plant_ip, status='success')
         except Exception as e:
             log_feeding_feedback(f"Failed to set feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
             message.append(f"Skipped {plant_ip}: Failed to start feeding")
-            # Reset feeding_in_progress on error
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -194,7 +198,6 @@ def start_feeding_sequence():
         if not all([drain_valve_ip, drain_valve, fill_valve_ip, fill_valve]):
             log_feeding_feedback(f"Missing valve information for plant {plant_ip}", plant_ip, status='error')
             message.append(f"Skipped {plant_ip}: Missing valve information")
-            # Reset feeding_in_progress on error
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -207,7 +210,6 @@ def start_feeding_sequence():
         log_feeding_feedback(f"Turning on drain valve {drain_valve} ({drain_valve_label}) at {drain_valve_ip} for plant {plant_ip}", plant_ip, status='info')
         if not control_valve(plant_ip, drain_valve_ip, drain_valve, 'on'):
             message.append(f"Failed {plant_ip}: Could not turn on drain valve")
-            # Reset feeding_in_progress on error
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -221,7 +223,7 @@ def start_feeding_sequence():
         if not empty_sensor:
             log_feeding_feedback(f"No Empty sensor configured for plant {plant_ip}", plant_ip, status='error')
             message.append(f"Failed {plant_ip}: No Empty sensor")
-            # Reset feeding_in_progress on error
+            control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')  # Ensure valve is off
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -229,12 +231,12 @@ def start_feeding_sequence():
             except Exception as e:
                 log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
             continue
+        log_feeding_feedback(f"Starting wait for Empty sensor on {plant_ip}", plant_ip, status='info')
         if not wait_for_sensor(plant_ip, empty_sensor, True):
+            control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
             if stop_feeding_flag:
-                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
                 log_feeding_feedback(f"Stopped {plant_ip}: User interrupted during draining", plant_ip, status='error')
                 message.append(f"Stopped {plant_ip}: User interrupted during draining")
-                # Reset feeding_in_progress on interruption
                 try:
                     response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                     response.raise_for_status()
@@ -243,7 +245,6 @@ def start_feeding_sequence():
                     log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
             else:
                 message.append(f"Failed {plant_ip}: Drain timeout or error")
-                # Reset feeding_in_progress on error
                 try:
                     response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                     response.raise_for_status()
@@ -256,7 +257,7 @@ def start_feeding_sequence():
         if not wait_for_valve_off(plant_ip, drain_valve_ip, drain_valve, drain_valve_label):
             log_feeding_feedback(f"Failed to confirm drain valve {drain_valve} ({drain_valve_label}) off for plant {plant_ip}", plant_ip, status='error')
             message.append(f"Failed {plant_ip}: Drain valve not turned off")
-            # Reset feeding_in_progress on error
+            control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')  # Ensure valve is off
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -270,7 +271,6 @@ def start_feeding_sequence():
         log_feeding_feedback(f"Turning on fill valve {fill_valve} ({fill_valve_label}) at {fill_valve_ip} for plant {plant_ip}", plant_ip, status='info')
         if not control_valve(plant_ip, fill_valve_ip, fill_valve, 'on'):
             message.append(f"Failed {plant_ip}: Could not turn on fill valve")
-            # Reset feeding_in_progress on error
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -284,7 +284,7 @@ def start_feeding_sequence():
         if not full_sensor:
             log_feeding_feedback(f"No Full sensor configured for plant {plant_ip}", plant_ip, status='error')
             message.append(f"Failed {plant_ip}: No Full sensor")
-            # Reset feeding_in_progress on error
+            control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')  # Ensure valve is off
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -292,12 +292,12 @@ def start_feeding_sequence():
             except Exception as e:
                 log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
             continue
-        if not wait_for_sensor(plant_ip, full_sensor, True):
+        log_feeding_feedback(f"Starting wait for Full sensor on {plant_ip}", plant_ip, status='info')
+        if not wait_for_sensor(plant_ip, full_sensor, False):
+            control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')
             if stop_feeding_flag:
-                control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')
                 log_feeding_feedback(f"Stopped {plant_ip}: User interrupted during filling", plant_ip, status='error')
                 message.append(f"Stopped {plant_ip}: User interrupted during filling")
-                # Reset feeding_in_progress on interruption
                 try:
                     response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                     response.raise_for_status()
@@ -306,7 +306,6 @@ def start_feeding_sequence():
                     log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
             else:
                 message.append(f"Failed {plant_ip}: Fill timeout or error")
-                # Reset feeding_in_progress on error
                 try:
                     response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                     response.raise_for_status()
@@ -319,7 +318,7 @@ def start_feeding_sequence():
         if not wait_for_valve_off(plant_ip, fill_valve_ip, fill_valve, fill_valve_label):
             log_feeding_feedback(f"Failed to confirm fill valve {fill_valve} ({fill_valve_label}) off for plant {plant_ip}", plant_ip, status='error')
             message.append(f"Failed {plant_ip}: Fill valve not turned off")
-            # Reset feeding_in_progress on error
+            control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')  # Ensure valve is off
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -328,9 +327,6 @@ def start_feeding_sequence():
                 log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
             continue
         log_feeding_feedback(f"Fill complete for plant {plant_ip}. Fill valve confirmed off.", plant_ip, status='info')
-
-        log_feeding_feedback(f"Feeding completed for plant {plant_ip}", plant_ip, status='success')
-        message.append(f"Completed {plant_ip}")
 
         # Log the current flow readings after feeding completion
         fresh_total = get_fresh_total_volume()
@@ -372,16 +368,13 @@ def stop_feeding_sequence():
             continue
 
         try:
-            # Emit stop_feeding for remote state
             plant_clients[plant_ip].emit('stop_feeding', namespace='/status')
-            # Call API to reset feeding_in_progress
             response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
             response.raise_for_status()
             log_feeding_feedback(f"Reset feeding_in_progress for plant {plant_ip}", plant_ip, status='success')
         except Exception as e:
             log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
 
-        # Turn off active valves
         with current_app.config['plant_lock']:
             plant_data = plants_data.get(plant_ip, {})
             valve_info = plant_data.get('valve_info', {})
