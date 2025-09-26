@@ -3,6 +3,7 @@ import eventlet
 import requests
 from .log_service import log_event
 from datetime import datetime
+from utils.mdns_utils import standardize_host_ip
 
 # Global flag to track if feeding should be stopped
 stop_feeding_flag = False
@@ -33,7 +34,11 @@ def log_feeding_feedback(message, plant_ip=None, status='info'):
 
 def control_valve(plant_ip, valve_ip, valve_id, action):
     """Control a valve (on/off) via the valve_relay API."""
-    url = f"http://{valve_ip}:8000/api/valve_relay/{valve_id}/{action}"
+    resolved_valve_ip = standardize_host_ip(valve_ip)
+    if not resolved_valve_ip:
+        log_feeding_feedback(f"Failed to resolve valve IP {valve_ip} for plant {plant_ip}", plant_ip, status='error')
+        return False
+    url = f"http://{resolved_valve_ip}:8000/api/valve_relay/{valve_id}/{action}"
     try:
         response = requests.post(url, timeout=5)
         response.raise_for_status()
@@ -98,12 +103,19 @@ def start_feeding_sequence():
             message.append(f"Skipped {plant_ip}: Remote feeding not allowed")
             continue
 
+        # Resolve plant IP for API call
+        resolved_plant_ip = standardize_host_ip(plant_ip)
+        if not resolved_plant_ip:
+            log_feeding_feedback(f"Failed to resolve plant IP {plant_ip}", plant_ip, status='error')
+            message.append(f"Skipped {plant_ip}: Failed to resolve IP")
+            continue
+
         # Set feeding_in_progress
         try:
             # Emit start_feeding for remote state
             plant_clients[plant_ip].emit('start_feeding', namespace='/status')
             # Call API to set feeding_in_progress
-            response = requests.post(f"http://{plant_ip}:8000/api/settings/feeding_status", json={"in_progress": True}, timeout=5)
+            response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": True}, timeout=5)
             response.raise_for_status()
             log_feeding_feedback(f"Set feeding_in_progress for plant {plant_ip}", plant_ip, status='success')
         except Exception as e:
@@ -197,11 +209,16 @@ def stop_feeding_sequence():
         if plant_ip not in plant_clients or not plant_clients[plant_ip].connected:
             continue
 
+        resolved_plant_ip = standardize_host_ip(plant_ip)
+        if not resolved_plant_ip:
+            log_feeding_feedback(f"Failed to resolve plant IP {plant_ip} for stop", plant_ip, status='error')
+            continue
+
         try:
             # Emit stop_feeding for remote state
             plant_clients[plant_ip].emit('stop_feeding', namespace='/status')
             # Call API to reset feeding_in_progress
-            response = requests.post(f"http://{plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
+            response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
             response.raise_for_status()
             log_feeding_feedback(f"Reset feeding_in_progress for plant {plant_ip}", plant_ip, status='success')
         except Exception as e:

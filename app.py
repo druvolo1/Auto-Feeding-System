@@ -4,7 +4,7 @@ eventlet.monkey_patch()
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 from flask_cors import CORS
-import socketio as sio_module  # Renamed to avoid conflict
+import socketio as sio_module
 from threading import Lock, Event
 import time
 import socket
@@ -180,6 +180,10 @@ def reload_plants():
             with plant_lock:
                 if plant in plant_data:
                     del plant_data[plant]
+    
+    # Log the state of plant_clients
+    connected_plants = [plant for plant, client in plant_clients.items() if client.connected]
+    log_feeding_feedback(f"Plant clients after reload: {connected_plants}", status='info')
 
 def monitor_remote_plants():
     # Initial load on startup
