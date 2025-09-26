@@ -56,7 +56,10 @@ def control_valve(plant_ip, valve_ip, valve_id, action):
 
 def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=300):
     """Wait for a water level sensor to reach the expected triggered state."""
-    log_feeding_feedback(f"Starting sensor wait for {sensor_key} (triggered={expected_triggered}) for plant {plant_ip}", plant_ip, status='info')
+    with current_app.config['plant_lock']:
+        plant_data = current_app.config['plant_data']
+        sensor_label = plant_data.get(plant_ip, {}).get('water_level', {}).get(sensor_key, {}).get('label', sensor_key)
+    log_feeding_feedback(f"Starting sensor wait for {sensor_label} (triggered={expected_triggered}) for plant {plant_ip}", plant_ip, status='info')
     start_time = time.time()
     while time.time() - start_time < timeout:
         if stop_feeding_flag:
@@ -65,10 +68,10 @@ def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=300):
         with current_app.config['plant_lock']:
             plant_data = current_app.config['plant_data']
             if plant_ip in plant_data and plant_data[plant_ip].get('water_level', {}).get(sensor_key, {}).get('triggered') == expected_triggered:
-                log_feeding_feedback(f"Sensor {sensor_key} reached expected state (triggered={expected_triggered}) for plant {plant_ip}", plant_ip, status='success')
+                log_feeding_feedback(f"Sensor {sensor_label} reached expected state (triggered={expected_triggered}) for plant {plant_ip}", plant_ip, status='success')
                 return True
-        eventlet.sleep(1)
-    log_feeding_feedback(f"Timeout waiting for sensor {sensor_key} to reach triggered={expected_triggered} for plant {plant_ip}", plant_ip, status='error')
+        time.sleep(1)  # Blocking sleep to ensure sequential processing
+    log_feeding_feedback(f"Timeout waiting for sensor {sensor_label} to reach triggered={expected_triggered} for plant {plant_ip}", plant_ip, status='error')
     return False
 
 def start_feeding_sequence():

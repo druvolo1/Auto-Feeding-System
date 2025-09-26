@@ -90,7 +90,7 @@
         <ul>
             <li><a href="/" class="active">Home</a></li>
             <li><a href="/settings">Settings</a></li>
-            <li><a href="/debug">Debug</a></li>
+            <li><a href="/debug">Settings</a></li>
             <li><a href="/logs">Logs</a></li>
         </ul>
     </nav>
@@ -332,9 +332,7 @@
                 .then(response => response.json())
                 .then(data => {
                     console.log('Start all feeding response:', data);
-                    if (data.status === 'success') {
-                        alert(data.message || 'Feeding sequence completed');
-                    } else {
+                    if (data.status !== 'success') {
                         alert(`Failed to start feeding: ${data.error || 'Unknown error'}`);
                     }
                 })
@@ -353,9 +351,7 @@
                 .then(response => response.json())
                 .then(data => {
                     console.log('Stop all feeding response:', data);
-                    if (data.status === 'success') {
-                        alert(data.message || 'Feeding stopped');
-                    } else {
+                    if (data.status !== 'success') {
                         alert(`Failed to stop feeding: ${data.error || 'Unknown error'}`);
                     }
                 })
