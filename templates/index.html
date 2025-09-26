@@ -145,6 +145,7 @@
 
     <script>
         const socket = io.connect('http://' + document.domain + ':' + location.port + '/status', { transports: ['websocket'] });
+        let feedingSequenceActive = false;
 
         // Connection status handling
         const statusElement = document.getElementById('connection-status');
@@ -205,27 +206,30 @@
             }
         });
 
+        socket.on('feeding_sequence_state', function(data) {
+            feedingSequenceActive = data.active;
+            console.log(`Feeding sequence state updated to: ${feedingSequenceActive}`);
+            updateFeedingButtons();
+        });
+
         let headersSet = false;
         let lastUpdateCache = {};
         let plantsData = [];
 
-        socket.on('plants_update', function(data) {
-            console.log('Received plants_update:', data);
+        // Helper function to render the plants table
+        function renderPlantsTable(plants) {
             const plantsTableBody = document.getElementById('plants-table').getElementsByTagName('tbody')[0];
             const thead = document.getElementById('plants-table').getElementsByTagName('thead')[0];
             plantsTableBody.innerHTML = '';
-            plantsData = data.plants || [];
 
-            if (!data.plants || data.plants.length === 0) {
+            if (!plants || plants.length === 0) {
                 console.log('No plants data received');
-                document.getElementById('start-all-feeding').disabled = true;
-                document.getElementById('stop-all-feeding').disabled = true;
                 return;
             }
 
             let sensorKeys = [];
             let sensorHeaders = [];
-            const firstOnlinePlant = data.plants.find(plant => plant.is_online === true) || data.plants[0];
+            const firstOnlinePlant = plants.find(plant => plant.is_online === true) || plants[0];
             if (firstOnlinePlant) {
                 const firstPlantWaterLevels = firstOnlinePlant.water_level || {};
                 sensorKeys = Object.keys(firstPlantWaterLevels);
@@ -252,7 +256,7 @@
             }
 
             const fragment = document.createDocumentFragment();
-            data.plants.forEach(plant => {
+            plants.forEach(plant => {
                 console.log(`Processing plant ${plant.ip || 'local'}: is_online = ${plant.is_online}, valve_relays = ${JSON.stringify(plant.valve_info?.valve_relays)}`);
                 const row = document.createElement('tr');
 
@@ -314,16 +318,28 @@
             });
 
             plantsTableBody.appendChild(fragment);
+        }
 
+        // Helper function to update feeding buttons based on local sequence state
+        function updateFeedingButtons() {
             const startButton = document.getElementById('start-all-feeding');
             const stopButton = document.getElementById('stop-all-feeding');
-            const canStart = plantsData.some(plant => plant.is_online && plant.settings?.allow_remote_feeding && !plant.feeding_in_progress);
-            const canStop = plantsData.some(plant => plant.is_online && plant.settings?.allow_remote_feeding && plant.feeding_in_progress);
-            startButton.disabled = !canStart;
-            stopButton.disabled = !canStop;
+            startButton.disabled = feedingSequenceActive;  // Disable Start while sequence is active
+            stopButton.disabled = !feedingSequenceActive;  // Enable Stop while sequence is active
+            console.log(`Updated buttons: feedingSequenceActive=${feedingSequenceActive}, Start disabled=${startButton.disabled}, Stop disabled=${stopButton.disabled}`);
+        }
+
+        socket.on('plants_update', function(data) {
+            console.log('Received plants_update:', data);
+            plantsData = data.plants || [];
+            renderPlantsTable(plantsData);
         });
 
         function startAllFeeding() {
+            if (feedingSequenceActive) {
+                console.warn('Feeding sequence already active, ignoring start request');
+                return;
+            }
             fetch('/api/feeding/start_all', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -343,6 +359,10 @@
         }
 
         function stopAllFeeding() {
+            if (!feedingSequenceActive) {
+                console.warn('No feeding sequence active, ignoring stop request');
+                return;
+            }
             fetch('/api/feeding/stop_all', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
