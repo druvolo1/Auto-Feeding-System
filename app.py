@@ -21,7 +21,6 @@ from api.valve_relay import valve_relay_blueprint
 from api.feed_level import feed_level_blueprint
 from api.feed_pump import feed_pump_blueprint
 from api.feeding import feeding_blueprint
-from services.log_service import log_event
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
@@ -29,6 +28,7 @@ from services.feed_flow_service import get_latest_flow_rate as get_latest_feed_f
 from services.drain_flow_service import get_latest_flow_rate as get_latest_drain_flow_rate, get_total_volume as get_drain_total_volume, reset_total as reset_drain_total, flow_reader as drain_flow_reader
 from services.valve_relay_service import reinitialize_relay_service, get_relay_status
 from services.feed_level_service import get_feed_level
+from services.log_service import log_event
 
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
