@@ -28,13 +28,13 @@
             background-color: #333;
         }
         #plants-table tr.disconnected {
-            background-color: #ff0000; /* Changed to red for disconnected plant */
+            background-color: #ff0000;
         }
         #plants-table tr.disconnected:nth-child(even) {
-            background-color: #cc0000; /* Darker red for even rows */
+            background-color: #cc0000;
         }
         #connection-status {
-            color: orange; /* Default connecting color */
+            color: orange;
         }
         #connection-status.connected {
             color: green;
@@ -110,6 +110,10 @@
                 <!-- Dynamically populated by JS -->
             </tbody>
         </table>
+        <div id="feeding-controls">
+            <button id="start-all-feeding" class="feeding-button" onclick="startAllFeeding()">Start All Feeding</button>
+            <button id="stop-all-feeding" class="feeding-button" onclick="stopAllFeeding()">Stop All Feeding</button>
+        </div>
 
         <p id="last-updated" class="last-updated">Last updated: Never</p>
         <p id="connection-status">Connecting...</p>
@@ -167,15 +171,20 @@
 
         let headersSet = false;
         let lastUpdateCache = {};
+        let plantsData = []; // Store plants data for button logic
 
         socket.on('plants_update', function(data) {
             console.log('Received plants_update:', data);
             const plantsTableBody = document.getElementById('plants-table').getElementsByTagName('tbody')[0];
             const thead = document.getElementById('plants-table').getElementsByTagName('thead')[0];
             plantsTableBody.innerHTML = '';
+            plantsData = data.plants || []; // Store for button logic
 
             if (!data.plants || data.plants.length === 0) {
                 console.log('No plants data received');
+                // Disable both buttons if no plants
+                document.getElementById('start-all-feeding').disabled = true;
+                document.getElementById('stop-all-feeding').disabled = true;
                 return;
             }
 
@@ -204,7 +213,6 @@
                         ${sensorHeaders.map(label => `<th>${label}</th>`).join('')}
                         <th>Fill Valve</th>
                         <th>Drain Valve</th>
-                        <th>Actions</th>
                     </tr>
                 `;
                 headersSet = true;
@@ -270,24 +278,6 @@
                     row.appendChild(td);
                 });
 
-                // Feeding action buttons
-                const actionTd = document.createElement('td');
-                const startButton = document.createElement('button');
-                startButton.className = 'feeding-button';
-                startButton.innerText = 'Start Feeding';
-                startButton.onclick = () => startFeeding(plantKey);
-                startButton.disabled = isOffline || !plant.settings?.allow_remote_feeding || plant.feeding_in_progress;
-
-                const stopButton = document.createElement('button');
-                stopButton.className = 'feeding-button';
-                stopButton.innerText = 'Stop Feeding';
-                stopButton.onclick = () => stopFeeding(plantKey);
-                stopButton.disabled = isOffline || !plant.settings?.allow_remote_feeding || !plant.feeding_in_progress;
-
-                actionTd.appendChild(startButton);
-                actionTd.appendChild(stopButton);
-                row.appendChild(actionTd);
-
                 // Hidden valve info
                 const hiddenDiv = document.createElement('div');
                 hiddenDiv.style.display = 'none';
@@ -299,48 +289,92 @@
             });
 
             plantsTableBody.appendChild(fragment);
+
+            // Update button states
+            const startButton = document.getElementById('start-all-feeding');
+            const stopButton = document.getElementById('stop-all-feeding');
+            const canStart = plantsData.some(plant => plant.is_online && plant.settings?.allow_remote_feeding && !plant.feeding_in_progress);
+            const canStop = plantsData.some(plant => plant.is_online && plant.settings?.allow_remote_feeding && plant.feeding_in_progress);
+            startButton.disabled = !canStart;
+            stopButton.disabled = !canStop;
         });
 
-        function startFeeding(plantIp) {
-            fetch('/api/feeding/start', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({plant_ip: plantIp})
-            })
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Start feeding response:', data);
-                    if (data.status === 'success') {
-                        alert(`Feeding started for ${plantIp}`);
-                    } else {
-                        alert(`Failed to start feeding: ${data.error}`);
-                    }
+        function startAllFeeding() {
+            const eligiblePlants = plantsData.filter(plant => plant.is_online && plant.settings?.allow_remote_feeding && !plant.feeding_in_progress);
+            if (eligiblePlants.length === 0) {
+                alert('No eligible plants to start feeding.');
+                return;
+            }
+
+            Promise.all(eligiblePlants.map(plant => 
+                fetch('/api/feeding/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ plant_ip: plant.ip })
                 })
-                .catch(error => {
-                    console.error('Error starting feeding:', error);
-                    alert('Error starting feeding');
-                });
+                .then(response => response.json())
+                .then(data => ({ plant_ip: plant.ip, data }))
+                .catch(error => ({ plant_ip: plant.ip, error }))
+            ))
+            .then(results => {
+                const successes = results.filter(r => r.data?.status === 'success').map(r => r.plant_ip);
+                const failures = results.filter(r => r.data?.status !== 'success' || r.error).map(r => ({
+                    plant_ip: r.plant_ip,
+                    error: r.data?.error || r.error.message
+                }));
+
+                let message = '';
+                if (successes.length > 0) {
+                    message += `Started feeding for: ${successes.join(', ')}. `;
+                }
+                if (failures.length > 0) {
+                    message += `Failed to start feeding for: ${failures.map(f => `${f.plant_ip} (${f.error})`).join(', ')}.`;
+                }
+                alert(message.trim());
+            })
+            .catch(error => {
+                console.error('Error starting all feeding:', error);
+                alert('Error starting feeding for all plants');
+            });
         }
 
-        function stopFeeding(plantIp) {
-            fetch('/api/feeding/stop', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({plant_ip: plantIp})
-            })
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Stop feeding response:', data);
-                    if (data.status === 'success') {
-                        alert(`Feeding stopped for ${plantIp}`);
-                    } else {
-                        alert(`Failed to stop feeding: ${data.error}`);
-                    }
+        function stopAllFeeding() {
+            const eligiblePlants = plantsData.filter(plant => plant.is_online && plant.settings?.allow_remote_feeding && plant.feeding_in_progress);
+            if (eligiblePlants.length === 0) {
+                alert('No eligible plants to stop feeding.');
+                return;
+            }
+
+            Promise.all(eligiblePlants.map(plant => 
+                fetch('/api/feeding/stop', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ plant_ip: plant.ip })
                 })
-                .catch(error => {
-                    console.error('Error stopping feeding:', error);
-                    alert('Error stopping feeding');
-                });
+                .then(response => response.json())
+                .then(data => ({ plant_ip: plant.ip, data }))
+                .catch(error => ({ plant_ip: plant.ip, error }))
+            ))
+            .then(results => {
+                const successes = results.filter(r => r.data?.status === 'success').map(r => r.plant_ip);
+                const failures = results.filter(r => r.data?.status !== 'success' || r.error).map(r => ({
+                    plant_ip: r.plant_ip,
+                    error: r.data?.error || r.error.message
+                }));
+
+                let message = '';
+                if (successes.length > 0) {
+                    message += `Stopped feeding for: ${successes.join(', ')}. `;
+                }
+                if (failures.length > 0) {
+                    message += `Failed to stop feeding for: ${failures.map(f => `${f.plant_ip} (${f.error})`).join(', ')}.`;
+                }
+                alert(message.trim());
+            })
+            .catch(error => {
+                console.error('Error stopping all feeding:', error);
+                alert('Error stopping feeding for all plants');
+            });
         }
 
         function resetFreshTotal() {
