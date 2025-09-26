@@ -4,6 +4,7 @@ import requests
 from .log_service import log_event
 from datetime import datetime
 from utils.mdns_utils import standardize_host_ip
+import time
 
 # Global flag to track if feeding should be stopped
 stop_feeding_flag = False
@@ -55,8 +56,9 @@ def control_valve(plant_ip, valve_ip, valve_id, action):
 
 def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=300):
     """Wait for a water level sensor to reach the expected triggered state."""
-    start_time = eventlet.getcurrent().time()
-    while eventlet.getcurrent().time() - start_time < timeout:
+    log_feeding_feedback(f"Starting sensor wait for {sensor_key} (triggered={expected_triggered}) for plant {plant_ip}", plant_ip, status='info')
+    start_time = time.time()
+    while time.time() - start_time < timeout:
         if stop_feeding_flag:
             log_feeding_feedback(f"Feeding interrupted by user for plant {plant_ip}", plant_ip, status='error')
             return False
