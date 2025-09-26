@@ -10,13 +10,14 @@ from services.feed_flow_service import get_total_volume as get_feed_total_volume
 from services.drain_flow_service import get_total_volume as get_drain_total_volume, reset_total as reset_drain_total
 from utils.settings_utils import load_settings
 from flask_socketio import SocketIO  # Import SocketIO explicitly
+from app import app  # Import the Flask app instance from app.py
 
 # Global flag to track if feeding should be stopped
 stop_feeding_flag = False
 feeding_sequence_active = False
 
-# Assume socketio is initialized in app.py and imported here
-socketio = None  # Will be set when the module is imported with the app
+# Global socketio instance (set by app.py)
+socketio = None
 
 def set_socketio_instance(sio):
     """Set the global socketio instance."""
@@ -130,7 +131,7 @@ def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retri
 
 def monitor_drain_flow(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, settings, sio):
     """Monitor drain flow during the draining process and return flow status."""
-    with app.app_context():  # Push application context
+    with app.app_context():  # Push application context using the imported app
         activation_flow_rate = settings.get('activation_flow_rate', 0.2)  # Default to 0.2 Gal/min
         min_flow_rate = settings.get('min_flow_rate', 0.05)  # Default to 0.05 Gal/min
         activation_delay = settings.get('activation_delay', 5)  # Default to 5 seconds
@@ -190,17 +191,19 @@ def start_feeding_sequence():
 
     log_feeding_feedback(f"Starting feeding sequence for {len(plant_clients)} plants")
     socketio_instance = current_app.extensions.get('socketio')  # Get socketio instance
+    if not socketio_instance:
+        raise RuntimeError("SocketIO extension not found in current_app.extensions")
     socketio_instance.emit('feeding_sequence_state', {'active': True}, namespace='/status')
 
     if not plant_clients:
-        log_feeding_feedback("No plants configured in plant_clients", status='error')
+        log_feeding_feedback("No plants configured in plant_clients", status='error', sio=socketio_instance)
         feeding_sequence_active = False
         socketio_instance.emit('feeding_sequence_state', {'active': False}, namespace='/status')
         return "No plants configured for feeding"
 
     for plant_ip in list(plant_clients.keys()):
         if stop_feeding_flag:
-            log_feeding_feedback("Feeding sequence stopped by user", status='error')
+            log_feeding_feedback("Feeding sequence stopped by user", status='error', sio=socketio_instance)
             message.append("Feeding sequence stopped by user")
             break
 
