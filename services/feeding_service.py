@@ -94,9 +94,11 @@ def start_feeding_sequence():
 
         # Set feeding_in_progress
         try:
+            # Emit start_feeding for remote state
             plant_clients[plant_ip].emit('start_feeding', namespace='/status')
-            # Also call the API to set feeding_in_progress
-            requests.post(f"http://{plant_ip}:8000/api/settings/feeding_status", json={"in_progress": True})
+            # Call API to set feeding_in_progress
+            response = requests.post(f"http://{plant_ip}:8000/api/settings/feeding_status", json={"in_progress": True}, timeout=5)
+            response.raise_for_status()
             log_feeding_feedback(f"Set feeding_in_progress for plant {plant_ip}", plant_ip, status='success')
         except Exception as e:
             log_feeding_feedback(f"Failed to set feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
@@ -130,14 +132,14 @@ def start_feeding_sequence():
         empty_sensor = next((k for k, v in water_level.items() if v.get('label') == 'Empty'), None)
         if not empty_sensor or not wait_for_sensor(plant_ip, empty_sensor, True):
             if stop_feeding_flag:
-                # Explicitly turn off drain valve on interrupt
                 control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
+                log_feeding_feedback(f"Stopped {plant_ip}: User interrupted during draining", plant_ip, status='error')
                 message.append(f"Stopped {plant_ip}: User interrupted during draining")
             else:
                 message.append(f"Failed {plant_ip}: Drain timeout or error")
             continue
 
-        # Remote system handles drain valve turn-off; log assumption
+        # Remote system handles drain valve turn-off
         log_feeding_feedback(f"Drain complete for plant {plant_ip}. Assuming remote turned off drain valve.", plant_ip, status='info')
 
         # Turn on fill valve
@@ -150,14 +152,14 @@ def start_feeding_sequence():
         full_sensor = next((k for k, v in water_level.items() if v.get('label') == 'Full'), None)
         if not full_sensor or not wait_for_sensor(plant_ip, full_sensor, True):
             if stop_feeding_flag:
-                # Explicitly turn off fill valve on interrupt
                 control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')
+                log_feeding_feedback(f"Stopped {plant_ip}: User interrupted during filling", plant_ip, status='error')
                 message.append(f"Stopped {plant_ip}: User interrupted during filling")
             else:
                 message.append(f"Failed {plant_ip}: Fill timeout or error")
             continue
 
-        # Remote system handles fill valve turn-off; log assumption
+        # Remote system handles fill valve turn-off
         log_feeding_feedback(f"Fill complete for plant {plant_ip}. Assuming remote turned off fill valve.", plant_ip, status='info')
 
         log_feeding_feedback(f"Feeding completed for plant {plant_ip}", plant_ip, status='success')
@@ -180,9 +182,11 @@ def stop_feeding_sequence():
             continue
 
         try:
+            # Emit stop_feeding for remote state
             plant_clients[plant_ip].emit('stop_feeding', namespace='/status')
-            # Also call the API to reset feeding_in_progress
-            requests.post(f"http://{plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False})
+            # Call API to reset feeding_in_progress
+            response = requests.post(f"http://{plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
+            response.raise_for_status()
             log_feeding_feedback(f"Reset feeding_in_progress for plant {plant_ip}", plant_ip, status='success')
         except Exception as e:
             log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
@@ -201,9 +205,11 @@ def stop_feeding_sequence():
 
         if drain_valve_ip and drain_valve and valve_relays.get(drain_valve_label, {}).get('status') == 'on':
             control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
+            log_feeding_feedback(f"Turned off drain valve {drain_valve} ({drain_valve_label}) for plant {plant_ip}", plant_ip, status='success')
 
         if fill_valve_ip and fill_valve and valve_relays.get(fill_valve_label, {}).get('status') == 'on':
             control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')
+            log_feeding_feedback(f"Turned off fill valve {fill_valve} ({fill_valve_label}) for plant {plant_ip}", plant_ip, status='success')
 
         message.append(f"Stopped {plant_ip}")
 
