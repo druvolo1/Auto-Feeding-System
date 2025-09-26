@@ -66,13 +66,21 @@
             padding: 10px;
             background-color: #1e1e1e;
             border: 1px solid #ddd;
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
             font-size: 0.9em;
         }
         #feeding-feedback p {
             margin: 5px 0;
+        }
+        #feeding-feedback p.info {
             color: #fff;
+        }
+        #feeding-feedback p.success {
+            color: #0f0;
+        }
+        #feeding-feedback p.error {
+            color: #f00;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
@@ -167,7 +175,7 @@
             document.getElementById('fresh-flow-rate').innerText = (data.fresh_flow !== null ? data.fresh_flow + ' Gal/min' : 'Loading...');
             document.getElementById('fresh-total-volume').innerText = (data.fresh_total_volume !== null ? data.fresh_total_volume + ' Gal' : 'Loading...');
             document.getElementById('feed-flow-rate').innerText = (data.feed_flow !== null ? data.feed_flow + ' Gal/min' : 'Loading...');
-            document.getElementById('feed-total-volume').innerText = (data.feed_total_volume !== null ? data.feed_total_volume + ' Gal' : 'Loading...');
+            document.getElementById('feed-total-volume').innerText = (data.feed_total_volume !== null ? data.fresh_total_volume + ' Gal' : 'Loading...');
             document.getElementById('drain-flow-rate').innerText = (data.drain_flow !== null ? data.drain_flow + ' Gal/min' : 'Loading...');
             document.getElementById('drain-total-volume').innerText = (data.drain_total_volume !== null ? data.drain_total_volume + ' Gal' : 'Loading...');
 
@@ -188,9 +196,9 @@
         socket.on('feeding_feedback', function(data) {
             const feedbackContainer = document.getElementById('feeding-feedback');
             const message = document.createElement('p');
+            message.className = data.status || 'info';
             message.innerText = `[${new Date(data.timestamp).toLocaleString()}] ${data.message}`;
-            feedbackContainer.prepend(message); // Prepend to show newest messages at the top
-            // Limit to 50 messages to prevent DOM bloat
+            feedbackContainer.prepend(message);
             while (feedbackContainer.children.length > 50) {
                 feedbackContainer.removeChild(feedbackContainer.lastChild);
             }
@@ -315,81 +323,45 @@
         });
 
         function startAllFeeding() {
-            const eligiblePlants = plantsData.filter(plant => plant.is_online && plant.settings?.allow_remote_feeding && !plant.feeding_in_progress);
-            if (eligiblePlants.length === 0) {
-                alert('No eligible plants to start feeding.');
-                return;
-            }
-
-            Promise.all(eligiblePlants.map(plant => 
-                fetch('/api/feeding/start', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ plant_ip: plant.ip })
-                })
-                .then(response => response.json())
-                .then(data => ({ plant_ip: plant.ip, data }))
-                .catch(error => ({ plant_ip: plant.ip, error }))
-            ))
-            .then(results => {
-                const successes = results.filter(r => r.data?.status === 'success').map(r => r.plant_ip);
-                const failures = results.filter(r => r.data?.status !== 'success' || r.error).map(r => ({
-                    plant_ip: r.plant_ip,
-                    error: r.data?.error || r.error.message
-                }));
-
-                let message = '';
-                if (successes.length > 0) {
-                    message += `Started feeding for: ${successes.join(', ')}. `;
-                }
-                if (failures.length > 0) {
-                    message += `Failed to start feeding for: ${failures.map(f => `${f.plant_ip} (${f.error})`).join(', ')}.`;
-                }
-                alert(message.trim());
+            fetch('/api/feeding/start_all', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
             })
-            .catch(error => {
-                console.error('Error starting all feeding:', error);
-                alert('Error starting feeding for all plants');
-            });
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Start all feeding response:', data);
+                    if (data.status === 'success') {
+                        alert(data.message);
+                    } else {
+                        alert(`Failed to start feeding: ${data.error}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error starting all feeding:', error);
+                    alert('Error starting feeding for all plants');
+                });
         }
 
         function stopAllFeeding() {
-            const eligiblePlants = plantsData.filter(plant => plant.is_online && plant.settings?.allow_remote_feeding && plant.feeding_in_progress);
-            if (eligiblePlants.length === 0) {
-                alert('No eligible plants to stop feeding.');
-                return;
-            }
-
-            Promise.all(eligiblePlants.map(plant => 
-                fetch('/api/feeding/stop', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ plant_ip: plant.ip })
-                })
-                .then(response => response.json())
-                .then(data => ({ plant_ip: plant.ip, data }))
-                .catch(error => ({ plant_ip: plant.ip, error }))
-            ))
-            .then(results => {
-                const successes = results.filter(r => r.data?.status === 'success').map(r => r.plant_ip);
-                const failures = results.filter(r => r.data?.status !== 'success' || r.error).map(r => ({
-                    plant_ip: r.plant_ip,
-                    error: r.data?.error || r.error.message
-                }));
-
-                let message = '';
-                if (successes.length > 0) {
-                    message += `Stopped feeding for: ${successes.join(', ')}. `;
-                }
-                if (failures.length > 0) {
-                    message += `Failed to stop feeding for: ${failures.map(f => `${f.plant_ip} (${f.error})`).join(', ')}.`;
-                }
-                alert(message.trim());
+            fetch('/api/feeding/stop_all', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
             })
-            .catch(error => {
-                console.error('Error stopping all feeding:', error);
-                alert('Error stopping feeding for all plants');
-            });
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Stop all feeding response:', data);
+                    if (data.status === 'success') {
+                        alert(data.message);
+                    } else {
+                        alert(`Failed to stop feeding: ${data.error}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error stopping all feeding:', error);
+                    alert('Error stopping feeding for all plants');
+                });
         }
 
         function resetFreshTotal() {

@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request, current_app
 from services.log_service import log_event
+from services.feeding_service import start_feeding_sequence, stop_feeding_sequence
 
 feeding_blueprint = Blueprint('feeding', __name__)
 
@@ -21,10 +22,7 @@ def log_feeding_feedback(message, plant_ip=None, status='info'):
     if plant_ip:
         log_data['plant_ip'] = plant_ip
     
-    # Emit to UI
     socketio.emit('feeding_feedback', log_data, namespace='/status')
-    
-    # Log to feeding.jsonl
     log_event(log_data, category='feeding')
 
 @feeding_blueprint.route('/start', methods=['POST'])
@@ -63,6 +61,24 @@ def stop_feeding():
         return jsonify({"status": "success", "message": f"Feeding stopped for {plant_ip}"})
     except Exception as e:
         log_feeding_feedback(f"Failed to stop feeding for {plant_ip}: {str(e)}", plant_ip, status='error')
+        return jsonify({"status": "failure", "error": str(e)}), 500
+
+@feeding_blueprint.route('/start_all', methods=['POST'])
+def start_all_feeding():
+    try:
+        message = start_feeding_sequence()
+        return jsonify({"status": "success", "message": message})
+    except Exception as e:
+        log_feeding_feedback(f"Failed to start feeding sequence: {str(e)}", status='error')
+        return jsonify({"status": "failure", "error": str(e)}), 500
+
+@feeding_blueprint.route('/stop_all', methods=['POST'])
+def stop_all_feeding():
+    try:
+        message = stop_feeding_sequence()
+        return jsonify({"status": "success", "message": message})
+    except Exception as e:
+        log_feeding_feedback(f"Failed to stop feeding sequence: {str(e)}", status='error')
         return jsonify({"status": "failure", "error": str(e)}), 500
 
 @feeding_blueprint.route('/status', methods=['GET'])
