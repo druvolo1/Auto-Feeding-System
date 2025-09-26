@@ -58,6 +58,11 @@
             width: 60px;
             margin-left: 5px;
         }
+        .tooltip {
+            margin-left: 10px;
+            font-size: 0.8em;
+            color: #888;
+        }
     </style>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -326,13 +331,18 @@
                     }
                 }
 
-                // Load drain flow settings
+                // Load drain flow settings with default values if not present
                 const drainFlowSettings = data.drain_flow_settings || {};
-                document.getElementById('activation-flow-rate').value = drainFlowSettings.activation_flow_rate || 0.2;
-                document.getElementById('min-flow-rate').value = drainFlowSettings.min_flow_rate || 0.05;
-                document.getElementById('activation-delay').value = drainFlowSettings.activation_delay || 5;
-                document.getElementById('min-flow-check-delay').value = drainFlowSettings.min_flow_check_delay || 30;
-                document.getElementById('max-drain-time').value = drainFlowSettings.max_drain_time || 600;
+                const activationFlow = document.getElementById('activation-flow-rate');
+                const minFlow = document.getElementById('min-flow-rate');
+                const activationDelay = document.getElementById('activation-delay');
+                const minFlowCheckDelay = document.getElementById('min-flow-check-delay');
+                const maxDrainTime = document.getElementById('max-drain-time');
+                if (activationFlow) activationFlow.value = drainFlowSettings.activation_flow_rate || 0.2;
+                if (minFlow) minFlow.value = drainFlowSettings.min_flow_rate || 0.05;
+                if (activationDelay) activationDelay.value = drainFlowSettings.activation_delay || 5;
+                if (minFlowCheckDelay) minFlowCheckDelay.value = drainFlowSettings.min_flow_check_delay || 30;
+                if (maxDrainTime) maxDrainTime.value = drainFlowSettings.max_drain_time || 600;
             })
             .catch(error => console.error('Error loading settings:', error));
     }
