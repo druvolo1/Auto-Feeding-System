@@ -8,6 +8,7 @@ import time
 from services.fresh_flow_service import get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total
 from services.feed_flow_service import get_total_volume as get_feed_total_volume, reset_total as reset_feed_total
 from services.drain_flow_service import get_total_volume as get_drain_total_volume, reset_total as reset_drain_total
+from utils.settings_utils import load_settings  # To access drain_flow_settings
 
 # Global flag to track if feeding should be stopped
 stop_feeding_flag = False
@@ -114,6 +115,53 @@ def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retri
     log_feeding_feedback(f"Failed waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} after {retries} attempts", plant_ip, status='error')
     return False
 
+def monitor_drain_flow(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, settings):
+    """Monitor drain flow during the draining process and return flow status."""
+    activation_flow_rate = settings.get('activation_flow_rate', 0.2)  # Default to 0.2 Gal/min
+    min_flow_rate = settings.get('min_flow_rate', 0.05)  # Default to 0.05 Gal/min
+    activation_delay = settings.get('activation_delay', 5)  # Default to 5 seconds
+    min_flow_check_delay = settings.get('min_flow_check_delay', 30)  # Default to 30 seconds
+    max_drain_time = settings.get('max_drain_time', 600)  # Default to 600 seconds
+
+    start_time = time.time()
+    flow_activated = False
+    last_flow_time = start_time
+    low_flow_detected = False
+
+    while time.time() - start_time < max_drain_time:
+        if stop_feeding_flag:
+            log_feeding_feedback(f"Feeding interrupted by user during drain flow monitoring for plant {plant_ip}", plant_ip, status='error')
+            return {'success': False, 'reason': 'interrupted'}
+
+        current_flow = get_drain_total_volume()  # Get cumulative flow since last reset
+        elapsed_time = time.time() - start_time
+
+        log_feeding_feedback(f"Drain flow for {plant_ip}: {current_flow:.2f} Gal (elapsed: {elapsed_time:.1f}s)", plant_ip, status='info')
+
+        if not flow_activated:
+            if current_flow / (elapsed_time / 60) >= activation_flow_rate:  # Convert to Gal/min
+                if elapsed_time >= activation_delay:
+                    flow_activated = True
+                    log_feeding_feedback(f"Drain flow activated for {plant_ip} after {activation_delay}s", plant_ip, status='info')
+        else:
+            if current_flow / (elapsed_time / 60) < min_flow_rate:
+                if time.time() - last_flow_time >= min_flow_check_delay:
+                    low_flow_detected = True
+                    log_feeding_feedback(f"Low drain flow detected for {plant_ip} (< {min_flow_rate} Gal/min), aborting drain", plant_ip, status='warning')
+                    control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
+                    return {'success': False, 'reason': 'low_flow'}
+                last_flow_time = time.time()
+
+        eventlet.sleep(1)  # Non-blocking sleep
+
+    if elapsed_time >= max_drain_time:
+        log_feeding_feedback(f"Max drain time ({max_drain_time}s) exceeded for {plant_ip}, aborting drain", plant_ip, status='warning')
+        control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
+        return {'success': False, 'reason': 'timeout'}
+
+    log_feeding_feedback(f"Drain flow monitoring completed for {plant_ip} with normal flow", plant_ip, status='success')
+    return {'success': True}
+
 def start_feeding_sequence():
     """Start the feeding sequence for all eligible plants sequentially."""
     global stop_feeding_flag, feeding_sequence_active
@@ -121,6 +169,7 @@ def start_feeding_sequence():
     feeding_sequence_active = True
     plant_clients = current_app.config.get('plant_clients', {})
     plants_data = current_app.config.get('plant_data', {})
+    settings = load_settings().get('drain_flow_settings', {})
     message = []
 
     log_feeding_feedback(f"Starting feeding sequence for {len(plant_clients)} plants", status='info')
@@ -218,12 +267,15 @@ def start_feeding_sequence():
                 log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
             continue
 
+        # Monitor drain flow concurrently with sensor wait
+        flow_monitor = eventlet.spawn(monitor_drain_flow, plant_ip, drain_valve_ip, drain_valve, drain_valve_label, settings)
+
         # Wait for drain completion (Empty sensor triggered)
         empty_sensor = next((k for k, v in water_level.items() if v.get('label') == 'Empty'), None)
         if not empty_sensor:
             log_feeding_feedback(f"No Empty sensor configured for plant {plant_ip}", plant_ip, status='error')
             message.append(f"Failed {plant_ip}: No Empty sensor")
-            control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')  # Ensure valve is off
+            control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -232,9 +284,16 @@ def start_feeding_sequence():
                 log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error')
             continue
         log_feeding_feedback(f"Starting wait for Empty sensor on {plant_ip}", plant_ip, status='info')
-        if not wait_for_sensor(plant_ip, empty_sensor, True):
-            control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
+        sensor_result = wait_for_sensor(plant_ip, empty_sensor, True)
+
+        # Get flow monitor result
+        flow_result = flow_monitor.wait()
+        if not flow_result['success']:
+            log_feeding_feedback(f"Drain flow issue for {plant_ip}: {flow_result['reason']}, proceeding to fill", plant_ip, status='warning')
+            control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')  # Stop drain if flow issue
+        elif not sensor_result:
             if stop_feeding_flag:
+                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
                 log_feeding_feedback(f"Stopped {plant_ip}: User interrupted during draining", plant_ip, status='error')
                 message.append(f"Stopped {plant_ip}: User interrupted during draining")
                 try:
@@ -257,7 +316,7 @@ def start_feeding_sequence():
         if not wait_for_valve_off(plant_ip, drain_valve_ip, drain_valve, drain_valve_label):
             log_feeding_feedback(f"Failed to confirm drain valve {drain_valve} ({drain_valve_label}) off for plant {plant_ip}", plant_ip, status='error')
             message.append(f"Failed {plant_ip}: Drain valve not turned off")
-            control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')  # Ensure valve is off
+            control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -284,7 +343,7 @@ def start_feeding_sequence():
         if not full_sensor:
             log_feeding_feedback(f"No Full sensor configured for plant {plant_ip}", plant_ip, status='error')
             message.append(f"Failed {plant_ip}: No Full sensor")
-            control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')  # Ensure valve is off
+            control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -318,7 +377,7 @@ def start_feeding_sequence():
         if not wait_for_valve_off(plant_ip, fill_valve_ip, fill_valve, fill_valve_label):
             log_feeding_feedback(f"Failed to confirm fill valve {fill_valve} ({fill_valve_label}) off for plant {plant_ip}", plant_ip, status='error')
             message.append(f"Failed {plant_ip}: Fill valve not turned off")
-            control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')  # Ensure valve is off
+            control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
