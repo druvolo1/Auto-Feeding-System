@@ -10,6 +10,9 @@ import time
 import socket
 from datetime import datetime
 
+# Import load_settings directly
+from api.settings import load_settings
+
 # Blueprints (imported later to avoid circular import)
 fresh_flow_blueprint = None
 feed_flow_blueprint = None
