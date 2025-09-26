@@ -10,6 +10,14 @@ import time
 import socket
 from datetime import datetime
 
+# Define debug_states globally
+debug_states = {
+    'plants': False,
+    'socket-connections': False,
+    'feeding': False,
+    'local-websocket': False
+}
+
 # Import load_settings directly
 from api.settings import load_settings
 
