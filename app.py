@@ -18,7 +18,8 @@ from api.debug import debug_blueprint, debug_states
 from api.logs import log_blueprint
 from api.valve_relay import valve_relay_blueprint
 from api.feed_level import feed_level_blueprint
-from api.feed_pump import feed_pump_blueprint  # New blueprint
+from api.feed_pump import feed_pump_blueprint
+from api.feeding import feeding_blueprint  # New blueprint for feeding
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
@@ -53,7 +54,8 @@ app.register_blueprint(debug_blueprint, url_prefix='/debug')
 app.register_blueprint(log_blueprint, url_prefix='/api/logs')
 app.register_blueprint(valve_relay_blueprint, url_prefix='/api/valve_relay')
 app.register_blueprint(feed_level_blueprint, url_prefix='/api/feed_level')
-app.register_blueprint(feed_pump_blueprint, url_prefix='/api/feed_pump')  # Register new blueprint
+app.register_blueprint(feed_pump_blueprint, url_prefix='/api/feed_pump')
+app.register_blueprint(feeding_blueprint, url_prefix='/api/feeding')  # Register new feeding blueprint
 
 # Shared state for remote plants
 plant_data = {}  # { 'plant_ip': {...} }
@@ -98,6 +100,8 @@ def connect_to_remote_plant(plant):
     def handle_status_update(data):
         if debug_states.get('plants', False):
             print(f"[DEBUG] Received status_update from {plant} at {ip}: {data}")
+        if debug_states.get('feeding', False):  # New debug state for feeding
+            print(f"[DEBUG] Feeding status from {plant}: in_progress={data.get('feeding_in_progress')}, allowed={data['settings'].get('allow_remote_feeding')}")
         with plant_lock:
             data['last_update'] = time.time() * 1000  # Milliseconds for JS
             data['ip'] = plant  # For identification (original hostname)

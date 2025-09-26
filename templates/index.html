@@ -52,6 +52,15 @@
         .indicator.empty {
             color: red;
         }
+        .feeding-button {
+            margin-right: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .feeding-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
 </head>
@@ -134,7 +143,7 @@
         });
 
         socket.on('local_status_update', function(data) {
-            console.log('Received local_status_update:', data); // Added debug log
+            console.log('Received local_status_update:', data);
             document.getElementById('fresh-flow-rate').innerText = (data.fresh_flow !== null ? data.fresh_flow + ' Gal/min' : 'Loading...');
             document.getElementById('fresh-total-volume').innerText = (data.fresh_total_volume !== null ? data.fresh_total_volume + ' Gal' : 'Loading...');
             document.getElementById('feed-flow-rate').innerText = (data.feed_flow !== null ? data.feed_flow + ' Gal/min' : 'Loading...');
@@ -143,7 +152,7 @@
             document.getElementById('drain-total-volume').innerText = (data.drain_total_volume !== null ? data.drain_total_volume + ' Gal' : 'Loading...');
 
             const feedLevelStatus = document.getElementById('feed-level-status');
-            if (data.feed_level !== undefined && data.feed_level !== null) { // More robust check
+            if (data.feed_level !== undefined && data.feed_level !== null) {
                 feedLevelStatus.innerText = data.feed_level;
                 feedLevelStatus.classList.remove('full', 'empty');
                 feedLevelStatus.classList.add(data.feed_level.toLowerCase());
@@ -156,14 +165,14 @@
             document.getElementById('last-updated').innerText = `Last updated: ${now.toLocaleString()}`;
         });
 
-        let headersSet = false; // Flag to track if headers are initialized
-        let lastUpdateCache = {}; // Cache to store last_update for offline plants
+        let headersSet = false;
+        let lastUpdateCache = {};
 
         socket.on('plants_update', function(data) {
-            console.log('Received plants_update:', data); // Debug log with full data
+            console.log('Received plants_update:', data);
             const plantsTableBody = document.getElementById('plants-table').getElementsByTagName('tbody')[0];
             const thead = document.getElementById('plants-table').getElementsByTagName('thead')[0];
-            plantsTableBody.innerHTML = ''; // Clear existing rows
+            plantsTableBody.innerHTML = '';
 
             if (!data.plants || data.plants.length === 0) {
                 console.log('No plants data received');
@@ -195,6 +204,7 @@
                         ${sensorHeaders.map(label => `<th>${label}</th>`).join('')}
                         <th>Fill Valve</th>
                         <th>Drain Valve</th>
+                        <th>Actions</th>
                     </tr>
                 `;
                 headersSet = true;
@@ -203,7 +213,7 @@
             // Build rows in a fragment to batch DOM insertion
             const fragment = document.createDocumentFragment();
             data.plants.forEach(plant => {
-                console.log(`Processing plant ${plant.ip || 'local'}: is_online = ${plant.is_online}, valve_relays = ${JSON.stringify(plant.valve_info?.valve_relays)}`); // Detailed debug
+                console.log(`Processing plant ${plant.ip || 'local'}: is_online = ${plant.is_online}, valve_relays = ${JSON.stringify(plant.valve_info?.valve_relays)}`);
                 const row = document.createElement('tr');
 
                 const plantKey = plant.ip || 'local';
@@ -232,7 +242,7 @@
                     isOffline ? 'Offline' : (plant.current_ph !== null ? plant.current_ph : 'N/A'),
                     isOffline ? 'Offline' : (plant.feeding_in_progress ? 'Yes' : 'No'),
                     isOffline ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No'),
-                    effectiveLastUpdate ? new Date(effectiveLastUpdate).toLocaleString() : 'N/A' // Human-readable format for Heartbeat
+                    effectiveLastUpdate ? new Date(effectiveLastUpdate).toLocaleString() : 'N/A'
                 ];
                 cells.forEach(text => {
                     const td = document.createElement('td');
@@ -260,6 +270,24 @@
                     row.appendChild(td);
                 });
 
+                // Feeding action buttons
+                const actionTd = document.createElement('td');
+                const startButton = document.createElement('button');
+                startButton.className = 'feeding-button';
+                startButton.innerText = 'Start Feeding';
+                startButton.onclick = () => startFeeding(plantKey);
+                startButton.disabled = isOffline || !plant.settings?.allow_remote_feeding || plant.feeding_in_progress;
+
+                const stopButton = document.createElement('button');
+                stopButton.className = 'feeding-button';
+                stopButton.innerText = 'Stop Feeding';
+                stopButton.onclick = () => stopFeeding(plantKey);
+                stopButton.disabled = isOffline || !plant.settings?.allow_remote_feeding || !plant.feeding_in_progress;
+
+                actionTd.appendChild(startButton);
+                actionTd.appendChild(stopButton);
+                row.appendChild(actionTd);
+
                 // Hidden valve info
                 const hiddenDiv = document.createElement('div');
                 hiddenDiv.style.display = 'none';
@@ -270,8 +298,50 @@
                 fragment.appendChild(row);
             });
 
-            plantsTableBody.appendChild(fragment); // Single DOM insert
+            plantsTableBody.appendChild(fragment);
         });
+
+        function startFeeding(plantIp) {
+            fetch('/api/feeding/start', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({plant_ip: plantIp})
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Start feeding response:', data);
+                    if (data.status === 'success') {
+                        alert(`Feeding started for ${plantIp}`);
+                    } else {
+                        alert(`Failed to start feeding: ${data.error}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error starting feeding:', error);
+                    alert('Error starting feeding');
+                });
+        }
+
+        function stopFeeding(plantIp) {
+            fetch('/api/feeding/stop', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({plant_ip: plantIp})
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Stop feeding response:', data);
+                    if (data.status === 'success') {
+                        alert(`Feeding stopped for ${plantIp}`);
+                    } else {
+                        alert(`Failed to stop feeding: ${data.error}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error stopping feeding:', error);
+                    alert('Error stopping feeding');
+                });
+        }
 
         function resetFreshTotal() {
             fetch('/api/fresh_flow/reset', { method: 'POST' })
