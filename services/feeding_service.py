@@ -21,7 +21,8 @@ def log_feeding_feedback(message, plant_ip=None, status='info'):
     log_data = {
         'event_type': 'feeding_feedback',
         'message': message,
-        'status': status
+        'status': status,
+        'timestamp': datetime.now().isoformat()
     }
     if plant_ip:
         log_data['plant_ip'] = plant_ip
@@ -70,7 +71,11 @@ def start_feeding_sequence():
     plants_data = current_app.config.get('plant_data', {})
     message = []
 
-    log_feeding_feedback("Starting feeding sequence for all plants", status='info')
+    log_feeding_feedback(f"Starting feeding sequence for {len(plant_clients)} plants", status='info')
+
+    if not plant_clients:
+        log_feeding_feedback("No plants configured in plant_clients", status='error')
+        return "No plants configured for feeding"
 
     for plant_ip in list(plant_clients.keys()):
         if stop_feeding_flag:
@@ -130,7 +135,11 @@ def start_feeding_sequence():
 
         # Wait for drain completion (Empty sensor triggered)
         empty_sensor = next((k for k, v in water_level.items() if v.get('label') == 'Empty'), None)
-        if not empty_sensor or not wait_for_sensor(plant_ip, empty_sensor, True):
+        if not empty_sensor:
+            log_feeding_feedback(f"No Empty sensor configured for plant {plant_ip}", plant_ip, status='error')
+            message.append(f"Failed {plant_ip}: No Empty sensor")
+            continue
+        if not wait_for_sensor(plant_ip, empty_sensor, True):
             if stop_feeding_flag:
                 control_valve(plant_ip, drain_valve_ip, drain_valve, 'off')
                 log_feeding_feedback(f"Stopped {plant_ip}: User interrupted during draining", plant_ip, status='error')
@@ -150,7 +159,11 @@ def start_feeding_sequence():
 
         # Wait for fill completion (Full sensor triggered)
         full_sensor = next((k for k, v in water_level.items() if v.get('label') == 'Full'), None)
-        if not full_sensor or not wait_for_sensor(plant_ip, full_sensor, True):
+        if not full_sensor:
+            log_feeding_feedback(f"No Full sensor configured for plant {plant_ip}", plant_ip, status='error')
+            message.append(f"Failed {plant_ip}: No Full sensor")
+            continue
+        if not wait_for_sensor(plant_ip, full_sensor, True):
             if stop_feeding_flag:
                 control_valve(plant_ip, fill_valve_ip, fill_valve, 'off')
                 log_feeding_feedback(f"Stopped {plant_ip}: User interrupted during filling", plant_ip, status='error')
@@ -165,6 +178,8 @@ def start_feeding_sequence():
         log_feeding_feedback(f"Feeding completed for plant {plant_ip}", plant_ip, status='success')
         message.append(f"Completed {plant_ip}")
 
+    if not message:
+        message.append("No eligible plants processed")
     return "Feeding sequence completed: " + "; ".join(message)
 
 def stop_feeding_sequence():
@@ -213,6 +228,8 @@ def stop_feeding_sequence():
 
         message.append(f"Stopped {plant_ip}")
 
+    if not message:
+        message.append("No plants were active")
     return "Feeding stopped: " + "; ".join(message)
 
 def initiate_local_feeding_support(plant_ip):

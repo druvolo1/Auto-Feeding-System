@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from services.log_service import log_event
 from services.feeding_service import start_feeding_sequence, stop_feeding_sequence
+from datetime import datetime
 
 feeding_blueprint = Blueprint('feeding', __name__)
 
@@ -17,7 +18,8 @@ def log_feeding_feedback(message, plant_ip=None, status='info'):
     log_data = {
         'event_type': 'feeding_feedback',
         'message': message,
-        'status': status
+        'status': status,
+        'timestamp': datetime.now().isoformat()  # Add timestamp
     }
     if plant_ip:
         log_data['plant_ip'] = plant_ip

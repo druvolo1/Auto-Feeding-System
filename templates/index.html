@@ -197,7 +197,8 @@
             const feedbackContainer = document.getElementById('feeding-feedback');
             const message = document.createElement('p');
             message.className = data.status || 'info';
-            message.innerText = `[${new Date(data.timestamp).toLocaleString()}] ${data.message}`;
+            const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleString() : new Date().toLocaleString();
+            message.innerText = `[${timestamp}] ${data.message}`;
             feedbackContainer.prepend(message);
             while (feedbackContainer.children.length > 50) {
                 feedbackContainer.removeChild(feedbackContainer.lastChild);
@@ -332,14 +333,14 @@
                 .then(data => {
                     console.log('Start all feeding response:', data);
                     if (data.status === 'success') {
-                        alert(data.message);
+                        alert(data.message || 'Feeding sequence completed');
                     } else {
-                        alert(`Failed to start feeding: ${data.error}`);
+                        alert(`Failed to start feeding: ${data.error || 'Unknown error'}`);
                     }
                 })
                 .catch(error => {
                     console.error('Error starting all feeding:', error);
-                    alert('Error starting feeding for all plants');
+                    alert(`Error starting feeding: ${error.message || 'Network error'}`);
                 });
         }
 
@@ -353,14 +354,14 @@
                 .then(data => {
                     console.log('Stop all feeding response:', data);
                     if (data.status === 'success') {
-                        alert(data.message);
+                        alert(data.message || 'Feeding stopped');
                     } else {
-                        alert(`Failed to stop feeding: ${data.error}`);
+                        alert(`Failed to stop feeding: ${data.error || 'Unknown error'}`);
                     }
                 })
                 .catch(error => {
                     console.error('Error stopping all feeding:', error);
-                    alert('Error stopping feeding for all plants');
+                    alert(`Error stopping feeding: ${error.message || 'Network error'}`);
                 });
         }
 
