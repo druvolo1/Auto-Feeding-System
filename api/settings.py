@@ -63,6 +63,22 @@ def update_settings():
         else:
             return jsonify({"status": "failure", "error": "Invalid feed pump configuration"}), 400
 
+    # Handle drain flow settings
+    if 'drain_flow_settings' in data:
+        drain_flow_settings = data['drain_flow_settings']
+        if (isinstance(drain_flow_settings.get('activation_flow_rate'), (int, float)) and
+            isinstance(drain_flow_settings.get('min_flow_rate'), (int, float)) and
+            isinstance(drain_flow_settings.get('activation_delay'), (int, float)) and
+            isinstance(drain_flow_settings.get('min_flow_check_delay'), (int, float)) and
+            isinstance(drain_flow_settings.get('max_drain_time'), (int, float))):
+            if drain_flow_settings['min_flow_rate'] >= drain_flow_settings['activation_flow_rate']:
+                return jsonify({"status": "failure", "error": "Minimum flow rate must be less than activation flow rate"}), 400
+            if drain_flow_settings['max_drain_time'] <= 0:
+                return jsonify({"status": "failure", "error": "Max drain time must be greater than 0"}), 400
+            settings['drain_flow_settings'] = drain_flow_settings
+        else:
+            return jsonify({"status": "failure", "error": "Invalid drain flow settings"}), 400
+
     save_settings(settings)
     
     if plants_changed:

@@ -208,6 +208,56 @@
                 turnOffFeedPump();
             });
         }
+
+        // Handle drain flow settings form submit
+        const drainFlowForm = document.getElementById('drain-flow-form');
+        if (drainFlowForm) {
+            drainFlowForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const activationFlow = parseFloat(document.getElementById('activation-flow-rate')?.value);
+                const minFlow = parseFloat(document.getElementById('min-flow-rate')?.value);
+                const activationDelay = parseInt(document.getElementById('activation-delay')?.value, 10);
+                const minFlowCheckDelay = parseInt(document.getElementById('min-flow-check-delay')?.value, 10);
+                const maxDrainTime = parseInt(document.getElementById('max-drain-time')?.value, 10);
+
+                if (isNaN(activationFlow) || isNaN(minFlow) || isNaN(activationDelay) || isNaN(minFlowCheckDelay) || isNaN(maxDrainTime)) {
+                    alert('Please enter valid numbers for all drain flow settings.');
+                    return;
+                }
+                if (minFlow >= activationFlow) {
+                    alert('Minimum flow rate must be less than activation flow rate.');
+                    return;
+                }
+                if (maxDrainTime <= 0) {
+                    alert('Max drain time must be greater than 0.');
+                    return;
+                }
+
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        drain_flow_settings: {
+                            activation_flow_rate: activationFlow,
+                            min_flow_rate: minFlow,
+                            activation_delay: activationDelay,
+                            min_flow_check_delay: minFlowCheckDelay,
+                            max_drain_time: maxDrainTime
+                        }
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('Drain flow settings saved successfully.');
+                            loadSettings();
+                        } else {
+                            alert('Failed to save drain flow settings: ' + data.error);
+                        }
+                    })
+                    .catch(error => console.error('Error saving drain flow settings:', error));
+            });
+        }
     });
 
     function loadSettings() {
@@ -275,6 +325,14 @@
                         feedPumpIo.checked = false;
                     }
                 }
+
+                // Load drain flow settings
+                const drainFlowSettings = data.drain_flow_settings || {};
+                document.getElementById('activation-flow-rate').value = drainFlowSettings.activation_flow_rate || 0.2;
+                document.getElementById('min-flow-rate').value = drainFlowSettings.min_flow_rate || 0.05;
+                document.getElementById('activation-delay').value = drainFlowSettings.activation_delay || 5;
+                document.getElementById('min-flow-check-delay').value = drainFlowSettings.min_flow_check_delay || 30;
+                document.getElementById('max-drain-time').value = drainFlowSettings.max_drain_time || 600;
             })
             .catch(error => console.error('Error loading settings:', error));
     }
@@ -310,7 +368,7 @@
         fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ additional_plants: [newIp] })  // Send as array to append
+            body: JSON.stringify({ additional_plants: [newIp] })
         })
             .then(response => response.json())
             .then(data => {
@@ -360,7 +418,7 @@
             .then(data => {
                 if (data.status === 'success') {
                     alert('Calibration factors saved successfully.');
-                    loadSettings();  // Reload to confirm
+                    loadSettings();
                 } else {
                     alert('Failed to save calibration factors: ' + data.error);
                 }
@@ -385,7 +443,7 @@
             .then(data => {
                 if (data.status === 'success') {
                     alert('Nutrient concentration saved successfully.');
-                    loadSettings();  // Reload to confirm
+                    loadSettings();
                 } else {
                     alert('Failed to save nutrient concentration: ' + data.error);
                 }
@@ -403,7 +461,7 @@
             .then(data => {
                 if (data.status === 'success') {
                     alert(`${role} assigned successfully.`);
-                    loadSettings();  // Refresh after save
+                    loadSettings();
                 } else {
                     alert(`Failed to assign ${role}: ${data.error}`);
                 }
@@ -475,7 +533,7 @@
                 if (data.status !== 'success') {
                     console.error('Failed to turn on feed pump:', data.error);
                 } else {
-                    updateFeedPumpButton('on'); // Update button state on success
+                    updateFeedPumpButton('on');
                 }
             })
             .catch(error => console.error('Error turning on feed pump:', error));
@@ -488,7 +546,7 @@
                 if (data.status !== 'success') {
                     console.error('Failed to turn off feed pump:', data.error);
                 } else {
-                    updateFeedPumpButton('off'); // Update button state on success
+                    updateFeedPumpButton('off');
                 }
             })
             .catch(error => console.error('Error turning off feed pump:', error));
@@ -507,7 +565,7 @@
             }
         }
     }
-</script>
+    </script>
 </head>
 <body>
     <nav>
@@ -632,6 +690,39 @@
             <br>
             <button id="feed-pump-on" class="small-btn relay-button" onclick="turnOnFeedPump()">On</button>
             <button id="feed-pump-off" class="small-btn relay-button" onclick="turnOffFeedPump()">Off</button>
+        </div>
+
+        <!-- Drain Flow Settings -->
+        <div class="data-container">
+            <h3>Drain Flow Settings</h3>
+            <form id="drain-flow-form">
+                <div class="calibration-row">
+                    <label>Activation Flow Rate (Gal/min):</label>
+                    <input type="number" id="activation-flow-rate" step="0.01" min="0">
+                    <span class="tooltip">Minimum flow to confirm draining has started.</span>
+                </div>
+                <div class="calibration-row">
+                    <label>Minimum Flow Rate (Gal/min):</label>
+                    <input type="number" id="min-flow-rate" step="0.01" min="0">
+                    <span class="tooltip">Threshold below which draining is considered stalled.</span>
+                </div>
+                <div class="calibration-row">
+                    <label>Activation Delay (seconds):</label>
+                    <input type="number" id="activation-delay" step="1" min="0">
+                    <span class="tooltip">Delay after flow exceeds activation before monitoring min flow.</span>
+                </div>
+                <div class="calibration-row">
+                    <label>Min Flow Check Delay (seconds):</label>
+                    <input type="number" id="min-flow-check-delay" step="1" min="0">
+                    <span class="tooltip">Delay after flow drops below min before aborting drain.</span>
+                </div>
+                <div class="calibration-row">
+                    <label>Max Drain Time (seconds):</label>
+                    <input type="number" id="max-drain-time" step="1" min="1">
+                    <span class="tooltip">Maximum time allowed for draining before timing out.</span>
+                </div>
+                <button class="small-btn" type="submit">Save Drain Flow Settings</button>
+            </form>
         </div>
 
     </main>
