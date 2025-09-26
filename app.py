@@ -10,17 +10,17 @@ import time
 import socket
 from datetime import datetime
 
-# Blueprints
-from api.fresh_flow import fresh_flow_blueprint
-from api.feed_flow import feed_flow_blueprint
-from api.drain_flow import drain_flow_blueprint
-from api.settings import settings_blueprint, load_settings
-from api.debug import debug_blueprint, debug_states
-from api.logs import log_blueprint
-from api.valve_relay import valve_relay_blueprint
-from api.feed_level import feed_level_blueprint
-from api.feed_pump import feed_pump_blueprint
-from api.feeding import feeding_blueprint
+# Blueprints (imported later to avoid circular import)
+fresh_flow_blueprint = None
+feed_flow_blueprint = None
+drain_flow_blueprint = None
+settings_blueprint = None
+debug_blueprint = None
+log_blueprint = None
+valve_relay_blueprint = None
+feed_level_blueprint = None
+feed_pump_blueprint = None
+feeding_blueprint = None
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
@@ -51,17 +51,37 @@ socketio.init_app(app)
 set_socketio_instance(socketio)
 socketio.on_namespace(StatusNamespace('/status'))
 
-# Register blueprints
-app.register_blueprint(fresh_flow_blueprint, url_prefix='/api/fresh_flow')
-app.register_blueprint(feed_flow_blueprint, url_prefix='/api/feed_flow')
-app.register_blueprint(drain_flow_blueprint, url_prefix='/api/drain_flow')
-app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
-app.register_blueprint(debug_blueprint, url_prefix='/debug')
-app.register_blueprint(log_blueprint, url_prefix='/api/logs')
-app.register_blueprint(valve_relay_blueprint, url_prefix='/api/valve_relay')
-app.register_blueprint(feed_level_blueprint, url_prefix='/api/feed_level')
-app.register_blueprint(feed_pump_blueprint, url_prefix='/api/feed_pump')
-app.register_blueprint(feeding_blueprint, url_prefix='/api/feeding')
+# Register blueprints after app initialization
+def register_blueprints():
+    global fresh_flow_blueprint, feed_flow_blueprint, drain_flow_blueprint, settings_blueprint, debug_blueprint, log_blueprint, valve_relay_blueprint, feed_level_blueprint, feed_pump_blueprint, feeding_blueprint
+    from api.fresh_flow import fresh_flow_blueprint
+    from api.feed_flow import feed_flow_blueprint
+    from api.drain_flow import drain_flow_blueprint
+    from api.settings import settings_blueprint
+    from api.debug import debug_blueprint
+    from api.logs import log_blueprint
+    from api.valve_relay import valve_relay_blueprint
+    from api.feed_level import feed_level_blueprint
+    from api.feed_pump import feed_pump_blueprint
+    from api.feeding import feeding_blueprint
+
+    app.register_blueprint(fresh_flow_blueprint, url_prefix='/api/fresh_flow')
+    app.register_blueprint(feed_flow_blueprint, url_prefix='/api/feed_flow')
+    app.register_blueprint(drain_flow_blueprint, url_prefix='/api/drain_flow')
+    app.register_blueprint(settings_blueprint, url_prefix='/api/settings')
+    app.register_blueprint(debug_blueprint, url_prefix='/debug')
+    app.register_blueprint(log_blueprint, url_prefix='/api/logs')
+    app.register_blueprint(valve_relay_blueprint, url_prefix='/api/valve_relay')
+    app.register_blueprint(feed_level_blueprint, url_prefix='/api/feed_level')
+    app.register_blueprint(feed_pump_blueprint, url_prefix='/api/feed_pump')
+    app.register_blueprint(feeding_blueprint, url_prefix='/api/feeding')
+
+# Call register_blueprints after app setup
+register_blueprints()
+
+# Pass app instance to feeding_service
+from services.feeding_service import initialize_feeding_service
+initialize_feeding_service(app, socketio)
 
 # Shared state for remote plants
 plant_data = app.config['plant_data']

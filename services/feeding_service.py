@@ -10,19 +10,20 @@ from services.feed_flow_service import get_total_volume as get_feed_total_volume
 from services.drain_flow_service import get_total_volume as get_drain_total_volume, reset_total as reset_drain_total
 from utils.settings_utils import load_settings
 from flask_socketio import SocketIO  # Import SocketIO explicitly
-from app import app  # Import the Flask app instance from app.py
 
 # Global flag to track if feeding should be stopped
 stop_feeding_flag = False
 feeding_sequence_active = False
 
-# Global socketio instance (set by app.py)
-socketio = None
+# Global variables to be set during initialization
+_app = None
+_socketio = None
 
-def set_socketio_instance(sio):
-    """Set the global socketio instance."""
-    global socketio
-    socketio = sio
+def initialize_feeding_service(app_instance, socketio_instance):
+    """Initialize the feeding service with the Flask app and SocketIO instances."""
+    global _app, _socketio
+    _app = app_instance
+    _socketio = socketio_instance
 
 def validate_feeding_allowed(plant_ip):
     with current_app.config['plant_lock']:
@@ -34,9 +35,9 @@ def validate_feeding_allowed(plant_ip):
 def log_feeding_feedback(message, plant_ip=None, status='info', sio=None):
     """
     Log feeding feedback to both the UI (via SocketIO) and feeding.jsonl.
-    Use the provided socketio instance if available, otherwise fall back to current_app.
+    Use the provided socketio instance if available, otherwise fall back to global or current_app.
     """
-    sio = sio or current_app.extensions.get('socketio')
+    sio = sio or _socketio or current_app.extensions.get('socketio')
     if not sio:
         print(f"[WARNING] SocketIO not available for logging: {message}")
         return
@@ -131,7 +132,7 @@ def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retri
 
 def monitor_drain_flow(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, settings, sio):
     """Monitor drain flow during the draining process and return flow status."""
-    with app.app_context():  # Push application context using the imported app
+    with _app.app_context():  # Use the globally set _app instance
         activation_flow_rate = settings.get('activation_flow_rate', 0.2)  # Default to 0.2 Gal/min
         min_flow_rate = settings.get('min_flow_rate', 0.05)  # Default to 0.05 Gal/min
         activation_delay = settings.get('activation_delay', 5)  # Default to 5 seconds
