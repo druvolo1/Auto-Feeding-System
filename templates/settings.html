@@ -13,11 +13,13 @@
             margin-bottom: 10px;
         }
         .calibration-row label {
-            width: 120px;
+            width: 150px; /* Increased from 120px for more space */
             margin-right: 10px;
         }
         .calibration-row input {
             flex: 1;
+            min-width: 150px; /* Added minimum width for better visibility */
+            padding: 5px; /* Added padding for usability */
         }
         .relay-port-select {
             width: 100px;
@@ -334,15 +336,15 @@
                 // Load drain flow settings with default values if not present
                 const drainFlowSettings = data.drain_flow_settings || {};
                 const activationFlow = document.getElementById('activation-flow-rate');
+                if (activationFlow) activationFlow.value = drainFlowSettings.activation_flow_rate !== undefined ? drainFlowSettings.activation_flow_rate : 0.2;
                 const minFlow = document.getElementById('min-flow-rate');
+                if (minFlow) minFlow.value = drainFlowSettings.min_flow_rate !== undefined ? drainFlowSettings.min_flow_rate : 0.05;
                 const activationDelay = document.getElementById('activation-delay');
+                if (activationDelay) activationDelay.value = drainFlowSettings.activation_delay !== undefined ? drainFlowSettings.activation_delay : 5;
                 const minFlowCheckDelay = document.getElementById('min-flow-check-delay');
+                if (minFlowCheckDelay) minFlowCheckDelay.value = drainFlowSettings.min_flow_check_delay !== undefined ? drainFlowSettings.min_flow_check_delay : 30;
                 const maxDrainTime = document.getElementById('max-drain-time');
-                if (activationFlow) activationFlow.value = drainFlowSettings.activation_flow_rate || 0.2;
-                if (minFlow) minFlow.value = drainFlowSettings.min_flow_rate || 0.05;
-                if (activationDelay) activationDelay.value = drainFlowSettings.activation_delay || 5;
-                if (minFlowCheckDelay) minFlowCheckDelay.value = drainFlowSettings.min_flow_check_delay || 30;
-                if (maxDrainTime) maxDrainTime.value = drainFlowSettings.max_drain_time || 600;
+                if (maxDrainTime) maxDrainTime.value = drainFlowSettings.max_drain_time !== undefined ? drainFlowSettings.max_drain_time : 600;
             })
             .catch(error => console.error('Error loading settings:', error));
     }
@@ -708,27 +710,27 @@
             <form id="drain-flow-form">
                 <div class="calibration-row">
                     <label>Activation Flow Rate (Gal/min):</label>
-                    <input type="number" id="activation-flow-rate" step="0.01" min="0">
+                    <input type="number" id="activation-flow-rate" step="0.01" min="0" value="0.2">
                     <span class="tooltip">Minimum flow to confirm draining has started.</span>
                 </div>
                 <div class="calibration-row">
                     <label>Minimum Flow Rate (Gal/min):</label>
-                    <input type="number" id="min-flow-rate" step="0.01" min="0">
+                    <input type="number" id="min-flow-rate" step="0.01" min="0" value="0.05">
                     <span class="tooltip">Threshold below which draining is considered stalled.</span>
                 </div>
                 <div class="calibration-row">
                     <label>Activation Delay (seconds):</label>
-                    <input type="number" id="activation-delay" step="1" min="0">
+                    <input type="number" id="activation-delay" step="1" min="0" value="5">
                     <span class="tooltip">Delay after flow exceeds activation before monitoring min flow.</span>
                 </div>
                 <div class="calibration-row">
                     <label>Min Flow Check Delay (seconds):</label>
-                    <input type="number" id="min-flow-check-delay" step="1" min="0">
+                    <input type="number" id="min-flow-check-delay" step="1" min="0" value="30">
                     <span class="tooltip">Delay after flow drops below min before aborting drain.</span>
                 </div>
                 <div class="calibration-row">
                     <label>Max Drain Time (seconds):</label>
-                    <input type="number" id="max-drain-time" step="1" min="1">
+                    <input type="number" id="max-drain-time" step="1" min="1" value="600">
                     <span class="tooltip">Maximum time allowed for draining before timing out.</span>
                 </div>
                 <button class="small-btn" type="submit">Save Drain Flow Settings</button>
