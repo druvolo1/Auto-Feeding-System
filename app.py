@@ -168,13 +168,11 @@ def connect_to_remote_plant(plant):
         if debug_states.get('socket-connections', False):
             print(f"[DEBUG] Plant {plant} already connected")
         log_feeding_feedback(f"Plant {plant} already connected", plant, status='info')
-        send_notification(f"Plant {plant} already connected")
         return
 
     ip = standardize_host_ip(plant)
     if not ip:
         log_feeding_feedback(f"Name resolution failed for {plant}, resolved IP: {ip}", plant, status='error')
-        send_notification(f"Name resolution failed for {plant}, resolved IP: {ip}")
         if debug_states.get('socket-connections', False):
             print(f"[ERROR] Name resolution failed for {plant}, resolved IP: {ip}")
         return
@@ -182,7 +180,6 @@ def connect_to_remote_plant(plant):
     if debug_states.get('socket-connections', False):
         print(f"[DEBUG] Resolved {plant} to IP: {ip} for connection")
     log_feeding_feedback(f"Resolved {plant} to IP: {ip} for connection", plant, status='info')
-    send_notification(f"Resolved {plant} to IP: {ip} for connection")
 
     sio = sio_module.Client()
     plant_clients[plant] = sio
@@ -192,7 +189,6 @@ def connect_to_remote_plant(plant):
         if debug_states.get('socket-connections', False):
             print(f"[INFO] Connected to remote plant: {plant} at {ip}")
         log_feeding_feedback(f"Connected to remote plant: {plant} at {ip}", plant, status='success')
-        send_notification(f"Connected to remote plant: {plant} at {ip}")
         with plant_lock:
             if plant in plant_data:
                 plant_data[plant]['is_online'] = True
@@ -202,7 +198,6 @@ def connect_to_remote_plant(plant):
         if debug_states.get('socket-connections', False):
             print(f"[INFO] Disconnected from remote plant: {plant} at {ip}")
         log_feeding_feedback(f"Disconnected from remote plant: {plant} at {ip}", plant, status='info')
-        send_notification(f"Disconnected from remote plant: {plant} at {ip}")
         with plant_lock:
             if plant in plant_data:
                 plant_data[plant]['last_update'] = None
@@ -228,10 +223,8 @@ def connect_to_remote_plant(plant):
         if debug_states.get('socket-connections', False):
             print(f"[DEBUG] Connect attempt to {plant} at {ip}:8000 succeeded")
         log_feeding_feedback(f"Connection succeeded to {plant} at {ip}:8000", plant, status='success')
-        send_notification(f"Connection succeeded to {plant} at {ip}:8000")
     except Exception as e:
         log_feeding_feedback(f"Failed to connect to {plant} at {ip}:8000: {str(e)}", plant, status='error')
-        send_notification(f"Failed to connect to {plant} at {ip}:8000: {str(e)}")
         if debug_states.get('socket-connections', False):
             print(f"[ERROR] Failed to connect to {plant} at {ip}:8000: {str(e)}")
 
@@ -243,11 +236,9 @@ def reload_plants():
     if debug_states.get('plants', False):
         print(f"[DEBUG] Loaded additional_plants: {additional_plants}")
     log_feeding_feedback(f"Loaded {len(additional_plants)} additional plants: {additional_plants}", status='info')
-    send_notification(f"Loaded {len(additional_plants)} additional plants: {additional_plants}")
     
     if not additional_plants:
         log_feeding_feedback("No additional plants configured in settings", status='error')
-        send_notification("No additional plants configured in settings")
     
     normalized_plants = {}
     for plant in additional_plants:
@@ -263,7 +254,6 @@ def reload_plants():
         if standardize_host_ip(plant) not in [standardize_host_ip(p) for p in normalized_plants.values()]:
             plant_clients[plant].disconnect()
             log_feeding_feedback(f"Disconnected removed plant {plant}", plant, status='info')
-            send_notification(f"Disconnected removed plant {plant}")
             del plant_clients[plant]
             with plant_lock:
                 if plant in plant_data:
@@ -272,7 +262,6 @@ def reload_plants():
     # Log the state of plant_clients
     connected_plants = [plant for plant, client in plant_clients.items() if client.connected]
     log_feeding_feedback(f"Plant clients after reload: {connected_plants}", status='info')
-    send_notification(f"Plant clients after reload: {connected_plants}")
 
 def monitor_remote_plants():
     # Initial load on startup
@@ -283,7 +272,6 @@ def monitor_remote_plants():
         if debug_states.get('plants', False):
             print("[DEBUG] Reload event triggered")
         log_feeding_feedback("Reload event triggered for plants", status='info')
-        send_notification("Reload event triggered for plants")
         reload_event.clear()
         reload_plants()
 
@@ -341,7 +329,6 @@ def broadcast_plants_status():
             if debug_states.get('plants', False):
                 print(f"[ERROR] Plants broadcast error: {e}")
             log_feeding_feedback(f"Plants broadcast error: {str(e)}", status='error')
-            send_notification(f"Plants broadcast error: {str(e)}")
             eventlet.sleep(5)
 
 def broadcast_local_status():
@@ -376,7 +363,6 @@ def broadcast_local_status():
         except Exception as e:
             print(f"[ERROR] Broadcast error: {e}")
             log_feeding_feedback(f"Local status broadcast error: {str(e)}", status='error')
-            send_notification(f"Local status broadcast error: {str(e)}")
 
 def start_threads():
     try:
@@ -395,7 +381,6 @@ def start_threads():
     except Exception as e:
         print(f"[ERROR] Failed to start threads: {e}")
         log_feeding_feedback(f"Failed to start threads: {str(e)}", status='error')
-        send_notification(f"Failed to start threads: {str(e)}")
 
 # Call start_threads here (runs on module import for Gunicorn)
 start_threads()
