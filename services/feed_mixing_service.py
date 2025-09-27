@@ -1,379 +1,96 @@
-import eventlet
 import time
 import requests
-from flask import Flask, current_app
-from datetime import datetime
-from services.valve_relay_service import turn_on_relay, turn_off_relay
+from flask import current_app
 from utils.settings_utils import load_settings
-from .log_service import log_event
-from services.feed_flow_service import get_total_volume as get_feed_total_volume, get_latest_flow_rate as get_latest_feed_flow_rate
-from services.fresh_flow_service import get_total_volume as get_fresh_total_volume, get_latest_flow_rate as get_latest_fresh_flow_rate
-import sys
-import os
+from services.feed_flow_service import get_total_volume as get_feed_total_volume
+from services.feed_pump_service import control_feed_pump
+from services.log_service import log_event
+from .feeding_service import log_feeding_feedback, stop_feeding_flag, send_notification
 
-# Global flag for mixing
-stop_mixing_flag = False
-
-def log_mixing_feedback(message, status='info', sio=None, app=None):
+def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'):
     """
-    Log mixing feedback to both the UI (via SocketIO) and feeding.jsonl.
+    Control a local relay via the internal API endpoint.
     """
-    if not sio or not app:
-        print(f"[WARNING] SocketIO or app not provided for logging: {message}")
-        return
-    with app.app_context():
-        sio_instance = sio or app.extensions.get('socketio')
-        if not sio_instance:
-            print(f"[WARNING] SocketIO not available for logging: {message}")
-            return
-        log_data = {
-            'event_type': 'mixing_feedback',
-            'message': message,
-            'status': status,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        sio_instance.emit('feeding_feedback', log_data, namespace='/status')
-        log_event(log_data, category='feeding')
-
-def control_local_valve(relay_port, action, valve_type, sio=None, app=None):
-    """
-    Control a local valve (feed_water or fresh_water) using the relay service.
-    """
+    url = f"http://127.0.0.1:8000/api/valve_relay/{relay_id}/{action}"
     try:
-        if action == 'on':
-            turn_on_relay(relay_port)
-        else:
-            turn_off_relay(relay_port)
-        log_mixing_feedback(f"{valve_type} valve (port {relay_port}) turned {action}", status='success', sio=sio, app=app)
-        return True
-    except Exception as e:
-        log_mixing_feedback(f"Failed to turn {action} {valve_type} valve (port {relay_port}): {str(e)}", status='error', sio=sio, app=app)
-        from app import send_notification
-        send_notification(f"Failed to turn {action} {valve_type} valve (port {relay_port}): {str(e)}")
-        return False
-
-def control_feed_pump(action, sio=None, app=None):
-    """
-    Control the feed pump using API endpoints /feed_pump/on or /feed_pump/off.
-    """
-    settings = load_settings()
-    base_url = settings.get('api_base_url', 'http://localhost:8000')  # Default to localhost:8000
-    log_mixing_feedback(f"Attempting to control feed pump: action={action}, base_url={base_url}", status='debug', sio=sio, app=app)
-    
-    try:
-        endpoint = f"{base_url}/feed_pump/{action}"
-        response = requests.post(endpoint, timeout=5)
-        if response.status_code == 200 and response.json().get('status') == 'success':
-            log_mixing_feedback(f"Feed pump turned {action} via API", status='success', sio=sio, app=app)
+        response = requests.post(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        if data.get('status') == 'success':
+            log_feeding_feedback(f"Local relay {relay_id} turned {action}", plant_ip, 'success', sio)
             return True
         else:
-            log_mixing_feedback(f"Failed to turn {action} feed pump via API: {response.text}", status='error', sio=sio, app=app)
-            from app import send_notification
-            send_notification(f"Failed to turn {action} feed pump via API: {response.text}")
+            log_feeding_feedback(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}", plant_ip, 'error', sio)
+            send_notification(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}")
             return False
     except Exception as e:
-        log_mixing_feedback(f"Failed to turn {action} feed pump via API: {str(e)}", status='error', sio=sio, app=app)
-        from app import send_notification
-        send_notification(f"Failed to turn {action} feed pump via API: {str(e)}")
+        log_feeding_feedback(f"Error controlling local relay {relay_id}: {str(e)}", plant_ip, 'error', sio)
+        send_notification(f"Error controlling local relay {relay_id}: {str(e)}")
         return False
 
-def wait_for_full_sensor(plant_ip, expected_triggered, timeout=600, sio=None, app=None):
+def monitor_feed_mixing(socketio, app):
     """
-    Wait for the full sensor to reach the expected triggered state (True for empty, False for full).
+    Background monitor that runs continuously to handle feed mixing during the fill phase.
     """
-    with app.app_context():
-        with app.config['plant_lock']:
-            plant_data = app.config['plant_data']
-            water_level = plant_data.get(plant_ip, {}).get('water_level', {})
-            sensor_label = water_level.get('sensor1', {}).get('label', 'sensor1')
-            initial_triggered = water_level.get('sensor1', {}).get('triggered', True)
-        log_mixing_feedback(f"Waiting for full sensor {sensor_label} to reach triggered={expected_triggered} for {plant_ip}, initial state={initial_triggered}", status='info', sio=sio, app=app)
-    
-    start_time = time.time()
-    counter = 0
-    while time.time() - start_time < timeout:
-        if not app.config.get('feeding_sequence_active', False):
-            log_mixing_feedback(f"Feeding sequence ended during full sensor wait for {plant_ip}", status='info', sio=sio, app=app)
-            return False
-        with app.app_context():
-            with app.config['plant_lock']:
-                plant_data = app.config['plant_data']
-                current_triggered = plant_data.get(plant_ip, {}).get('water_level', {}).get('sensor1', {}).get('triggered', initial_triggered)
-            if current_triggered == expected_triggered:
-                log_mixing_feedback(f"Full sensor {sensor_label} reached expected state (triggered={expected_triggered}) for {plant_ip}", status='success', sio=sio, app=app)
-                return True
-            if counter % 5 == 0:
-                log_mixing_feedback(f"Current full sensor status for {plant_ip}: triggered={current_triggered}", status='info', sio=sio, app=app)
-        eventlet.sleep(1)
-        counter += 1
-    log_mixing_feedback(f"Timeout waiting for full sensor {sensor_label} to reach triggered={expected_triggered} for {plant_ip}", status='error', sio=sio, app=app)
-    from app import send_notification
-    send_notification(f"Timeout waiting for full sensor {sensor_label} to reach triggered={expected_triggered} for {plant_ip}")
-    return False
-
-def monitor_feed_mixing(sio=None, app=None):
-    """
-    Monitor if feeding is active and control mixing of feed and fresh water during the fill phase.
-    Runs in a separate thread.
-    """
-    global stop_mixing_flag
-    if not app or not sio:
-        print("[ERROR] Flask app or SocketIO instance not provided to monitor_feed_mixing")
-        return
-    with app.app_context():
-        log_mixing_feedback("Monitor feed mixing thread started", status='info', sio=sio, app=app)
-        log_mixing_feedback(f"Module context: {__name__}", status='debug', sio=sio, app=app)
+    mixed = False  # Flag to track if mixing has started for the current fill phase
     while True:
-        try:
-            with app.app_context():
-                feeding_active = app.config.get('feeding_sequence_active', False)
-                log_mixing_feedback(f"Checking feeding_sequence_active: {feeding_active}", status='debug', sio=sio, app=app)
-            if not feeding_active:
-                with app.app_context():
-                    if app.config['debug_states'].get('feeding', False):
-                        log_mixing_feedback("Feeding sequence not active, waiting", status='info', sio=sio, app=app)
-                # Cleanup any active valves or pump
-                settings = load_settings()
-                relay_ports = settings.get('relay_ports', {})
-                feed_valve_port = relay_ports.get('feed_water')
-                fresh_valve_port = relay_ports.get('fresh_water')
-                if feed_valve_port:
-                    control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio, app=app)
-                if fresh_valve_port:
-                    control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio, app=app)
-                control_feed_pump('off', sio=sio, app=app)
-                eventlet.sleep(1)
+        phase = app.config.get('current_feeding_phase', 'idle')
+        plant_ip = app.config.get('current_plant_ip')
+        if phase == 'fill' and plant_ip and not mixed:
+            # Get system_volume from plant data
+            with current_app.config['plant_lock']:
+                system_volume = current_app.config['plant_data'].get(plant_ip, {}).get('settings', {}).get('system_volume', 0)
+            if system_volume == 0 or system_volume == 'N/A':
+                log_feeding_feedback(f"No valid system_volume for {plant_ip}, skipping mixing", plant_ip, 'warning', socketio)
+                time.sleep(1)
                 continue
 
-            with app.app_context():
-                plant_data = app.config['plant_data']
-                valve_status = plant_data.get('test1.local', {}).get('valve_status', {})
-                filling_active = valve_status.get('valve1', {}).get('status') == 'on'  # Fill valve (Test 1 Fill)
-                log_mixing_feedback(f"Checking fill valve status for test1.local: {filling_active}", status='debug', sio=sio, app=app)
-            if not filling_active:
-                with app.app_context():
-                    if app.config['debug_states'].get('feeding', False):
-                        log_mixing_feedback("Fill valve not active for test1.local, waiting", status='info', sio=sio, app=app)
-                # Ensure valves and pump are off
-                settings = load_settings()
-                relay_ports = settings.get('relay_ports', {})
-                feed_valve_port = relay_ports.get('feed_water')
-                fresh_valve_port = relay_ports.get('fresh_water')
-                if feed_valve_port:
-                    control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio, app=app)
-                if fresh_valve_port:
-                    control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio, app=app)
-                control_feed_pump('off', sio=sio, app=app)
-                eventlet.sleep(1)
-                continue
-
-            with app.app_context():
-                log_mixing_feedback(f"Fill valve active detected for test1.local, proceeding with mixing", status='debug', sio=sio, app=app)
-
-            if stop_mixing_flag:
-                with app.app_context():
-                    log_mixing_feedback("Stop mixing flag set, resetting", status='info', sio=sio, app=app)
-                stop_mixing_flag = False
-                eventlet.sleep(1)
-                continue
-
+            # Calculate target feed volume
             settings = load_settings()
-            with app.app_context():
-                log_mixing_feedback(f"Loaded settings: nutrient_concentration={settings.get('nutrient_concentration', 1)}, relay_ports={settings.get('relay_ports', {})}", status='debug', sio=sio, app=app)
-            nutrient_concentration = settings.get('nutrient_concentration', 1)
-            relay_ports = settings.get('relay_ports', {})
-            feed_valve_port = relay_ports.get('feed_water')
-            fresh_valve_port = relay_ports.get('fresh_water')
+            ratio = settings.get('nutrient_concentration', 1)
+            if ratio <= 0:
+                ratio = 1  # Prevent division by zero
+            target_feed_volume = system_volume / (ratio + 1)
+            log_feeding_feedback(f"Starting feed mixing for {plant_ip}, target feed volume: {target_feed_volume:.2f} Gal", plant_ip, 'info', socketio)
 
-            if not all([feed_valve_port, fresh_valve_port]):
-                with app.app_context():
-                    log_mixing_feedback("Missing feed or fresh valve port configuration", status='error', sio=sio, app=app)
-                    from app import send_notification
-                    send_notification("Missing feed or fresh valve port configuration")
-                eventlet.sleep(1)
-                continue
+            # Get relay ports
+            feed_relay = settings.get('relay_ports', {}).get('feed_water')
+            fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
 
-            with app.app_context():
-                with app.config['plant_lock']:
-                    plant_data = app.config['plant_data']
-                    log_mixing_feedback(f"Plant data keys: {list(plant_data.keys())}", status='debug', sio=sio, app=app)
-                    if not plant_data:
-                        log_mixing_feedback("No plant data available during active feeding, waiting", status='error', sio=sio, app=app)
-                        eventlet.sleep(1)
-                        continue
-                    try:
-                        plant_ip = list(plant_data.keys())[0]  # Adjust for multiple plants
-                        log_mixing_feedback(f"Selected plant_ip: {plant_ip}", status='debug', sio=sio, app=app)
-                    except IndexError:
-                        log_mixing_feedback("No plants in plant_data during active feeding, waiting", status='error', sio=sio, app=app)
-                        eventlet.sleep(1)
-                        continue
-                    system_volume = plant_data[plant_ip]['settings'].get('system_volume', 5.5)
-                    system_name = plant_data[plant_ip].get('system_name', plant_ip)
-                    log_mixing_feedback(f"System details: name={system_name}, volume={system_volume}", status='debug', sio=sio, app=app)
+            # Turn on feed pump
+            control_feed_pump(state=1)
 
-            # Wait for system to be empty (triggered=True) before starting mixing
-            if not wait_for_full_sensor(plant_ip, True, timeout=60, sio=sio, app=app):
-                with app.app_context():
-                    log_mixing_feedback(f"Failed to detect empty state (triggered=True) for {system_name}, stopping mixing", status='error', sio=sio, app=app)
-                    from app import send_notification
-                    send_notification(f"Failed to detect empty state for {system_name}")
-                eventlet.sleep(1)
-                continue
+            # Turn on fresh relay (if defined)
+            if fresh_relay:
+                control_local_relay(fresh_relay, 'on', socketio, plant_ip)
 
-            with app.app_context():
-                log_mixing_feedback(f"Feeding active, starting mixing monitoring for {system_name}", status='info', sio=sio, app=app)
-
-            if nutrient_concentration == 0:
-                target_nutrient = 0
-                target_fresh = system_volume
-                with app.app_context():
-                    log_mixing_feedback(f"Using only fresh water for {system_name} (nutrient_concentration=0, target volume {system_volume} Gal)", status='info', sio=sio, app=app)
+            # Turn on feed relay
+            if feed_relay:
+                control_local_relay(feed_relay, 'on', socketio, plant_ip)
             else:
-                total_parts = nutrient_concentration + 1
-                target_nutrient = system_volume / total_parts
-                target_fresh = system_volume - target_nutrient
-                with app.app_context():
-                    log_mixing_feedback(f"Target for {system_name}: {target_nutrient:.2f} Gal nutrient, {target_fresh:.2f} Gal fresh water (ratio {nutrient_concentration}:1)", status='info', sio=sio, app=app)
+                log_feeding_feedback(f"No feed_water relay defined, skipping feed relay control", plant_ip, 'warning', socketio)
 
-            nutrient_volume = 0
-            fresh_volume = 0
-            feed_valve_on = False
-            fresh_valve_on = False
-            pump_on = False
-            counter = 0
+            mixed = True
 
-            with app.app_context():
-                log_mixing_feedback(f"Starting valve and pump control for {system_name}", status='debug', sio=sio, app=app)
-
-            # Start mixing: Turn on valves and pump based on concentration
-            if nutrient_concentration > 0:
-                if control_local_valve(feed_valve_port, 'on', 'Feed', sio=sio, app=app):
-                    feed_valve_on = True
-                    if control_feed_pump('on', sio=sio, app=app):
-                        pump_on = True
-                else:
-                    with app.app_context():
-                        log_mixing_feedback(f"Failed to start feed valve for {system_name}, aborting mixing", status='error', sio=sio, app=app)
-                        from app import send_notification
-                        send_notification(f"Failed to start feed valve for {system_name}")
-                    eventlet.sleep(1)
-                    continue
-            if control_local_valve(fresh_valve_port, 'on', 'Fresh', sio=sio, app=app):
-                fresh_valve_on = True
-            else:
-                with app.app_context():
-                    log_mixing_feedback(f"Failed to start fresh valve for {system_name}, aborting mixing", status='error', sio=sio, app=app)
-                    from app import send_notification
-                    send_notification(f"Failed to start fresh valve for {system_name}")
-                if feed_valve_on:
-                    control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio, app=app)
-                if pump_on:
-                    control_feed_pump('off', sio=sio, app=app)
-                eventlet.sleep(1)
-                continue
-
-            with app.app_context():
-                log_mixing_feedback(f"Entered mixing loop for {system_name}, feed_valve_on={feed_valve_on}, fresh_valve_on={fresh_valve_on}, pump_on={pump_on}", status='debug', sio=sio, app=app)
-
-            while app.config.get('feeding_sequence_active', False) and not stop_mixing_flag:
-                with app.app_context():
-                    plant_data = app.config['plant_data']
-                    valve_status = plant_data.get('test1.local', {}).get('valve_status', {})
-                    filling_active = valve_status.get('valve1', {}).get('status') == 'on'
-                    if not filling_active:
-                        log_mixing_feedback(f"Fill valve turned off for test1.local, stopping mixing", status='info', sio=sio, app=app)
-                        break
-
-                nutrient_volume = get_feed_total_volume() or 0
-                fresh_volume = get_fresh_total_volume() or 0
-                total_volume = nutrient_volume + fresh_volume
-
-                with app.app_context():
-                    log_mixing_feedback(f"Mixing loop iteration {counter}: nutrient={nutrient_volume:.2f}, fresh={fresh_volume:.2f}, total={total_volume:.2f}", status='debug', sio=sio, app=app)
-
-                if total_volume >= system_volume - 0.01:
-                    with app.app_context():
-                        log_mixing_feedback(f"Total volume reached for {system_name} ({total_volume:.2f} Gal), stopping mixing", status='info', sio=sio, app=app)
+            # Monitor feed total volume until target reached
+            while True:
+                if stop_feeding_flag:
                     break
-
-                with app.app_context():
-                    with app.config['plant_lock']:
-                        plant_data = app.config['plant_data']
-                        water_level = plant_data.get(plant_ip, {}).get('water_level', {})
-                        full_sensor_triggered = water_level.get('sensor1', {}).get('triggered', True)
-                        log_mixing_feedback(f"Full sensor check: triggered={full_sensor_triggered}", status='debug', sio=sio, app=app)
-
-                if full_sensor_triggered == False:  # System is full
-                    with app.app_context():
-                        log_mixing_feedback(f"Full sensor triggered for {system_name}, stopping mixing", status='success', sio=sio, app=app)
+                feed_total = get_feed_total_volume()
+                if feed_total >= target_feed_volume:
+                    if feed_relay:
+                        control_local_relay(feed_relay, 'off', socketio, plant_ip)
+                    log_feeding_feedback(f"Target feed volume {target_feed_volume:.2f} Gal reached for {plant_ip} (actual: {feed_total:.2f} Gal), turned off feed relay", plant_ip, 'success', socketio)
                     break
-
-                if counter % 5 == 0:
-                    with app.app_context():
-                        if app.config['debug_states'].get('feed-flow', False):
-                            feed_flow_rate = get_latest_feed_flow_rate() or 0
-                            log_mixing_feedback(f"Feed flow for {system_name}: {feed_flow_rate:.2f} Gal/min, total: {nutrient_volume:.2f} Gal", status='info', sio=sio, app=app)
-                        if app.config['debug_states'].get('fresh-flow', False):
-                            fresh_flow_rate = get_latest_fresh_flow_rate() or 0
-                            log_mixing_feedback(f"Fresh flow for {system_name}: {fresh_flow_rate:.2f} Gal/min, total: {fresh_volume:.2f} Gal", status='info', sio=sio, app=app)
-
-                if nutrient_concentration > 0:
-                    current_ratio = fresh_volume / nutrient_volume if nutrient_volume > 0 else float('inf')
-                    with app.app_context():
-                        log_mixing_feedback(f"Ratio check: current_ratio={current_ratio:.2f}, nutrient_concentration={nutrient_concentration}", status='debug', sio=sio, app=app)
-                    if current_ratio < nutrient_concentration and fresh_valve_on:
-                        with app.app_context():
-                            log_mixing_feedback(f"Pausing fresh valve for {system_name} (current ratio {current_ratio:.2f} < {nutrient_concentration})", status='info', sio=sio, app=app)
-                        control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio, app=app)
-                        fresh_valve_on = False
-                    elif current_ratio > nutrient_concentration and not fresh_valve_on:
-                        with app.app_context():
-                            log_mixing_feedback(f"Resuming fresh valve for {system_name} (current ratio {current_ratio:.2f} > {nutrient_concentration})", status='info', sio=sio, app=app)
-                        if control_local_valve(fresh_valve_port, 'on', 'Fresh', sio=sio, app=app):
-                            fresh_valve_on = True
-
-                    if nutrient_volume >= target_nutrient and feed_valve_on:
-                        with app.app_context():
-                            log_mixing_feedback(f"Nutrient target reached for {system_name} ({nutrient_volume:.2f} Gal), stopping feed valve and pump", status='info', sio=sio, app=app)
-                        control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio, app=app)
-                        control_feed_pump('off', sio=sio, app=app)
-                        feed_valve_on = False
-                        pump_on = False
-
-                if fresh_volume >= target_fresh and fresh_valve_on:
-                    with app.app_context():
-                        log_mixing_feedback(f"Fresh water target reached for {system_name} ({fresh_volume:.2f} Gal), stopping fresh valve", status='info', sio=sio, app=app)
-                    control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio, app=app)
-                    fresh_valve_on = False
-
-                counter += 1
-                eventlet.sleep(1)
-
-            if feed_valve_on:
-                control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio, app=app)
-            if pump_on:
-                control_feed_pump('off', sio=sio, app=app)
-            if fresh_valve_on:
-                control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio, app=app)
-
-            with app.app_context():
-                log_mixing_feedback(f"Mixing completed or stopped for {system_name}", status='success', sio=sio, app=app)
-
-        except Exception as e:
-            with app.app_context():
-                log_mixing_feedback(f"Error in mixing loop: {str(e)}", status='error', sio=sio, app=app)
-                from app import send_notification
-                send_notification(f"Error in mixing loop: {str(e)}")
-            # Cleanup on error
-            settings = load_settings()
-            relay_ports = settings.get('relay_ports', {})
-            feed_valve_port = relay_ports.get('feed_water')
-            fresh_valve_port = relay_ports.get('fresh_water')
-            if feed_valve_port:
-                control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio, app=app)
-            if fresh_valve_port:
-                control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio, app=app)
-            control_feed_pump('off', sio=sio, app=app)
-            eventlet.sleep(1)
+                time.sleep(1)
+        else:
+            if mixed and phase != 'fill':
+                # Reset flag and turn off remaining components after fill phase
+                mixed = False
+                settings = load_settings()
+                fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
+                if fresh_relay:
+                    control_local_relay(fresh_relay, 'off', socketio)
+                control_feed_pump(state=0)
+                log_feeding_feedback(f"Completed post-fill cleanup for {plant_ip}", plant_ip, 'info', socketio)
+        time.sleep(1)

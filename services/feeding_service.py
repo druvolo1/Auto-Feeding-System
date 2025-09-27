@@ -231,6 +231,7 @@ def start_feeding_sequence():
     global stop_feeding_flag, drain_complete
     with current_app.app_context():
         current_app.config['feeding_sequence_active'] = True
+        current_app.config['current_feeding_phase'] = 'idle'  # Initialize phase
         log_feeding_feedback(f"Set feeding_sequence_active to True", status='debug')
     plant_clients = current_app.config.get('plant_clients', {})
     plants_data = current_app.config.get('plant_data', {})
@@ -245,6 +246,7 @@ def start_feeding_sequence():
         send_notification("SocketIO extension not found")
         with current_app.app_context():
             current_app.config['feeding_sequence_active'] = False
+            current_app.config['current_feeding_phase'] = 'idle'
             log_feeding_feedback(f"Set feeding_sequence_active to False due to SocketIO error", status='debug')
         socketio_instance.emit('feeding_sequence_state', {'active': False}, namespace='/status')
         return "SocketIO extension not found"
@@ -256,11 +258,16 @@ def start_feeding_sequence():
         send_notification("No plants configured in plant_clients")
         with current_app.app_context():
             current_app.config['feeding_sequence_active'] = False
+            current_app.config['current_feeding_phase'] = 'idle'
             log_feeding_feedback(f"Set feeding_sequence_active to False due to no plants", status='debug')
         socketio_instance.emit('feeding_sequence_state', {'active': False}, namespace='/status')
         return "No plants configured for feeding"
 
     for plant_ip in list(plant_clients.keys()):
+        with current_app.app_context():
+            current_app.config['current_plant_ip'] = plant_ip
+            current_app.config['current_feeding_phase'] = 'drain'
+
         if stop_feeding_flag:
             log_feeding_feedback("Feeding sequence stopped by user", status='error', sio=socketio_instance)
             send_notification("Feeding sequence stopped by user")
@@ -389,6 +396,9 @@ def start_feeding_sequence():
         else:
             log_feeding_feedback(f"Drain complete for plant {plant_ip}. Drain valve confirmed off.", plant_ip, status='info', sio=socketio_instance)
 
+        with current_app.app_context():
+            current_app.config['current_feeding_phase'] = 'fill'
+
         log_feeding_feedback(f"Turning on fill valve {fill_valve} ({fill_valve_label}) at {fill_valve_ip} for plant {plant_ip}", plant_ip, status='info', sio=socketio_instance)
         if not control_valve(plant_ip, fill_valve_ip, fill_valve, 'on', sio=socketio_instance):
             message.append(f"Failed {plant_ip}: Could not turn on fill valve")
@@ -455,6 +465,10 @@ def start_feeding_sequence():
             continue
         log_feeding_feedback(f"Fill complete for plant {plant_ip}. Fill valve confirmed off.", plant_ip, status='info', sio=socketio_instance)
 
+        with current_app.app_context():
+            current_app.config['current_feeding_phase'] = 'idle'
+            current_app.config['current_plant_ip'] = None
+
         fresh_total = get_fresh_total_volume()
         feed_total = get_feed_total_volume()
         drain_total = get_drain_total_volume()
@@ -464,6 +478,8 @@ def start_feeding_sequence():
 
     with current_app.app_context():
         current_app.config['feeding_sequence_active'] = False
+        current_app.config['current_feeding_phase'] = 'idle'
+        current_app.config['current_plant_ip'] = None
         log_feeding_feedback(f"Set feeding_sequence_active to False", status='debug')
     socketio_instance.emit('feeding_sequence_state', {'active': False}, namespace='/status')
     log_feeding_feedback(f"Completed full feeding cycle for all plants.", status='info', sio=socketio_instance)
@@ -476,10 +492,12 @@ def start_feeding_sequence():
 def stop_feeding_sequence():
     """Stop the feeding sequence by emitting stop_feeding and turning off active valves."""
     global stop_feeding_flag
+    stop_feeding_flag = True
     with current_app.app_context():
         current_app.config['feeding_sequence_active'] = False
+        current_app.config['current_feeding_phase'] = 'idle'
+        current_app.config['current_plant_ip'] = None
         log_feeding_feedback(f"Set feeding_sequence_active to False in stop_feeding_sequence", status='debug')
-    stop_feeding_flag = True
     plant_clients = current_app.config.get('plant_clients', {})
     plants_data = current_app.config.get('plant_data', {})
     message = []
@@ -488,6 +506,38 @@ def stop_feeding_sequence():
     log_feeding_feedback("Stopping feeding sequence for all plants", status='info', sio=socketio_instance)
     send_notification("Stopping feeding sequence for all plants")
     socketio_instance.emit('feeding_sequence_state', {'active': False}, namespace='/status')
+
+    # Clean up local relays and pump
+    from utils.settings_utils import load_settings
+    from services.feed_pump_service import control_feed_pump
+    settings = load_settings()
+    feed_relay = settings.get('relay_ports', {}).get('feed_water')
+    fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
+
+    def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'):
+        url = f"http://127.0.0.1:8000/api/valve_relay/{relay_id}/{action}"
+        try:
+            response = requests.post(url, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            if data.get('status') == 'success':
+                log_feeding_feedback(f"Local relay {relay_id} turned {action}", plant_ip, 'success', sio)
+                return True
+            else:
+                log_feeding_feedback(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}", plant_ip, 'error', sio)
+                send_notification(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}")
+                return False
+        except Exception as e:
+            log_feeding_feedback(f"Error controlling local relay {relay_id}: {str(e)}", plant_ip, 'error', sio)
+            send_notification(f"Error controlling local relay {relay_id}: {str(e)}")
+            return False
+
+    if feed_relay:
+        control_local_relay(feed_relay, 'off', socketio_instance)
+    if fresh_relay:
+        control_local_relay(fresh_relay, 'off', socketio_instance)
+    control_feed_pump(state=0)
+    log_feeding_feedback("Turned off local feed pump and relays", status='info', sio=socketio_instance)
 
     for plant_ip in plant_clients:
         if plant_ip not in plant_clients or not plant_clients[plant_ip].connected:
