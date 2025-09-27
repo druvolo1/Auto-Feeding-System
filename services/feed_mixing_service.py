@@ -34,63 +34,64 @@ def monitor_feed_mixing(socketio, app):
     """
     mixed = False  # Flag to track if mixing has started for the current fill phase
     while True:
-        phase = app.config.get('current_feeding_phase', 'idle')
-        plant_ip = app.config.get('current_plant_ip')
-        if phase == 'fill' and plant_ip and not mixed:
-            # Get system_volume from plant data
-            with current_app.config['plant_lock']:
-                system_volume = current_app.config['plant_data'].get(plant_ip, {}).get('settings', {}).get('system_volume', 0)
-            if system_volume == 0 or system_volume == 'N/A':
-                log_feeding_feedback(f"No valid system_volume for {plant_ip}, skipping mixing", plant_ip, 'warning', socketio)
-                time.sleep(1)
-                continue
+        with app.app_context():  # Create application context
+            phase = app.config.get('current_feeding_phase', 'idle')
+            plant_ip = app.config.get('current_plant_ip')
+            if phase == 'fill' and plant_ip and not mixed:
+                # Get system_volume from plant data
+                with app.config['plant_lock']:
+                    system_volume = app.config['plant_data'].get(plant_ip, {}).get('settings', {}).get('system_volume', 0)
+                if system_volume == 0 or system_volume == 'N/A':
+                    log_feeding_feedback(f"No valid system_volume for {plant_ip}, skipping mixing", plant_ip, 'warning', socketio)
+                    time.sleep(1)
+                    continue
 
-            # Calculate target feed volume
-            settings = load_settings()
-            ratio = settings.get('nutrient_concentration', 1)
-            if ratio <= 0:
-                ratio = 1  # Prevent division by zero
-            target_feed_volume = system_volume / (ratio + 1)
-            log_feeding_feedback(f"Starting feed mixing for {plant_ip}, target feed volume: {target_feed_volume:.2f} Gal", plant_ip, 'info', socketio)
-
-            # Get relay ports
-            feed_relay = settings.get('relay_ports', {}).get('feed_water')
-            fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
-
-            # Turn on feed pump
-            control_feed_pump(state=1)
-
-            # Turn on fresh relay (if defined)
-            if fresh_relay:
-                control_local_relay(fresh_relay, 'on', socketio, plant_ip)
-
-            # Turn on feed relay
-            if feed_relay:
-                control_local_relay(feed_relay, 'on', socketio, plant_ip)
-            else:
-                log_feeding_feedback(f"No feed_water relay defined, skipping feed relay control", plant_ip, 'warning', socketio)
-
-            mixed = True
-
-            # Monitor feed total volume until target reached
-            while True:
-                if stop_feeding_flag:
-                    break
-                feed_total = get_feed_total_volume()
-                if feed_total >= target_feed_volume:
-                    if feed_relay:
-                        control_local_relay(feed_relay, 'off', socketio, plant_ip)
-                    log_feeding_feedback(f"Target feed volume {target_feed_volume:.2f} Gal reached for {plant_ip} (actual: {feed_total:.2f} Gal), turned off feed relay", plant_ip, 'success', socketio)
-                    break
-                time.sleep(1)
-        else:
-            if mixed and phase != 'fill':
-                # Reset flag and turn off remaining components after fill phase
-                mixed = False
+                # Calculate target feed volume
                 settings = load_settings()
+                ratio = settings.get('nutrient_concentration', 1)
+                if ratio <= 0:
+                    ratio = 1  # Prevent division by zero
+                target_feed_volume = system_volume / (ratio + 1)
+                log_feeding_feedback(f"Starting feed mixing for {plant_ip}, target feed volume: {target_feed_volume:.2f} Gal", plant_ip, 'info', socketio)
+
+                # Get relay ports
+                feed_relay = settings.get('relay_ports', {}).get('feed_water')
                 fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
+
+                # Turn on feed pump
+                control_feed_pump(state=1)
+
+                # Turn on fresh relay (if defined)
                 if fresh_relay:
-                    control_local_relay(fresh_relay, 'off', socketio)
-                control_feed_pump(state=0)
-                log_feeding_feedback(f"Completed post-fill cleanup for {plant_ip}", plant_ip, 'info', socketio)
+                    control_local_relay(fresh_relay, 'on', socketio, plant_ip)
+
+                # Turn on feed relay
+                if feed_relay:
+                    control_local_relay(feed_relay, 'on', socketio, plant_ip)
+                else:
+                    log_feeding_feedback(f"No feed_water relay defined, skipping feed relay control", plant_ip, 'warning', socketio)
+
+                mixed = True
+
+                # Monitor feed total volume until target reached
+                while True:
+                    if stop_feeding_flag:
+                        break
+                    feed_total = get_feed_total_volume()
+                    if feed_total >= target_feed_volume:
+                        if feed_relay:
+                            control_local_relay(feed_relay, 'off', socketio, plant_ip)
+                        log_feeding_feedback(f"Target feed volume {target_feed_volume:.2f} Gal reached for {plant_ip} (actual: {feed_total:.2f} Gal), turned off feed relay", plant_ip, 'success', socketio)
+                        break
+                    time.sleep(1)
+            else:
+                if mixed and phase != 'fill':
+                    # Reset flag and turn off remaining components after fill phase
+                    mixed = False
+                    settings = load_settings()
+                    fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
+                    if fresh_relay:
+                        control_local_relay(fresh_relay, 'off', socketio)
+                    control_feed_pump(state=0)
+                    log_feeding_feedback(f"Completed post-fill cleanup for {plant_ip}", plant_ip, 'info', socketio)
         time.sleep(1)
