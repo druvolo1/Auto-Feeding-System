@@ -1,9 +1,9 @@
 import eventlet
 import time
-from flask import Flask
+from flask import Flask, current_app
 from datetime import datetime
 from services.valve_relay_service import turn_on_relay, turn_off_relay
-from services.feed_pump_service import control_feed_pump
+from services.feed_pump_service import control_feed_pump as pump_control
 from utils.settings_utils import load_settings
 from .log_service import log_event
 from services.feed_flow_service import get_total_volume as get_feed_total_volume, get_latest_flow_rate as get_latest_feed_flow_rate
@@ -65,7 +65,7 @@ def control_feed_pump(action, sio=None, app=None):
     try:
         if pump_type == 'io' and io_number:
             state = 1 if action == 'on' else 0
-            success = control_feed_pump(io_number=io_number, pump_type=pump_type, state=state)
+            success = pump_control(io_number=io_number, pump_type=pump_type, state=state)
             if success:
                 log_mixing_feedback(f"Feed pump (IO {io_number}) turned {action}", status='success', sio=sio, app=app)
                 return True
@@ -104,7 +104,7 @@ def wait_for_full_sensor(plant_ip, initial_triggered, expected_triggered, timeou
             with app.config['plant_lock']:
                 plant_data = app.config['plant_data']
                 current_triggered = plant_data.get(plant_ip, {}).get('water_level', {}).get('sensor1', {}).get('triggered', initial_triggered)
-            if current_triggered == expected_triggered and current_triggered != initial_triggered:
+            if current_triggered == expected_triggered and (current_triggered != initial_triggered or initial_triggered == expected_triggered):
                 state_changed = True
                 log_mixing_feedback(f"Full sensor {sensor_label} reached expected state (triggered={expected_triggered}) for {plant_ip}", status='success', sio=sio, app=app)
                 return True
@@ -138,6 +138,16 @@ def monitor_feed_mixing(sio=None, app=None):
                 with app.app_context():
                     if app.config['debug_states'].get('feeding', False):
                         log_mixing_feedback("Feeding sequence not active, waiting", status='info', sio=sio, app=app)
+                # Cleanup any active valves or pump
+                settings = load_settings()
+                relay_ports = settings.get('relay_ports', {})
+                feed_valve_port = relay_ports.get('feed_water')
+                fresh_valve_port = relay_ports.get('fresh_water')
+                if feed_valve_port:
+                    control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio, app=app)
+                if fresh_valve_port:
+                    control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio, app=app)
+                control_feed_pump('off', sio=sio, app=app)
                 eventlet.sleep(1)
                 continue
 
@@ -157,7 +167,7 @@ def monitor_feed_mixing(sio=None, app=None):
             nutrient_concentration = settings.get('nutrient_concentration', 1)
             relay_ports = settings.get('relay_ports', {})
             feed_valve_port = relay_ports.get('feed_water')
-            fresh_valve_port = relay_ports.get('fresh_water')
+            fresh_valve_port = settings.get('relay_ports', {}).get('fresh_water')
 
             if not all([feed_valve_port, fresh_valve_port]):
                 with app.app_context():
@@ -338,4 +348,14 @@ def monitor_feed_mixing(sio=None, app=None):
                 log_mixing_feedback(f"Error in mixing loop: {str(e)}", status='error', sio=sio, app=app)
                 from app import send_notification
                 send_notification(f"Error in mixing loop: {str(e)}")
+            # Cleanup on error
+            settings = load_settings()
+            relay_ports = settings.get('relay_ports', {})
+            feed_valve_port = relay_ports.get('feed_water')
+            fresh_valve_port = relay_ports.get('fresh_water')
+            if feed_valve_port:
+                control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio, app=app)
+            if fresh_valve_port:
+                control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio, app=app)
+            control_feed_pump('off', sio=sio, app=app)
             eventlet.sleep(1)
