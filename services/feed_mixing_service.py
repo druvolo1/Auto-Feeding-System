@@ -1,4 +1,3 @@
-```python
 import eventlet
 import time
 from flask import current_app
