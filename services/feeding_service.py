@@ -450,6 +450,10 @@ def start_feeding_sequence():
                     send_notification(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}")
             continue
 
+        # Emit fill_complete event when full sensor triggers
+        socketio_instance.emit('fill_complete', {'plant_ip': plant_ip}, namespace='/status')
+        log_feeding_feedback(f"Emitted fill_complete event for {plant_ip}", plant_ip, status='debug', sio=socketio_instance)
+
         if not wait_for_valve_off(plant_ip, fill_valve_ip, fill_valve, fill_valve_label, sio=socketio_instance):
             log_feeding_feedback(f"Failed to confirm fill valve {fill_valve} ({fill_valve_label}) off for {plant_ip}", plant_ip, status='error', sio=socketio_instance)
             send_notification(f"Failed to confirm fill valve {fill_valve} ({fill_valve_label}) off for {plant_ip}")
@@ -488,6 +492,7 @@ def start_feeding_sequence():
     if not message:
         message.append("No eligible plants processed")
     return "Feeding sequence completed: " + "; ".join(message)
+
 
 def stop_feeding_sequence():
     """Stop the feeding sequence by emitting stop_feeding and turning off active valves."""

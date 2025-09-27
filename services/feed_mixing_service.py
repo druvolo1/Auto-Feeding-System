@@ -5,6 +5,7 @@ from utils.settings_utils import load_settings
 from services.feed_flow_service import get_total_volume as get_feed_total_volume
 from services.log_service import log_event
 from .feeding_service import log_feeding_feedback, stop_feeding_flag, send_notification
+import eventlet
 
 def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'):
     """
@@ -58,13 +59,15 @@ def monitor_feed_mixing(socketio, app):
         with app.app_context():  # Create application context
             phase = app.config.get('current_feeding_phase', 'idle')
             plant_ip = app.config.get('current_plant_ip')
+            log_feeding_feedback(f"Checking phase for {plant_ip}: {phase}, mixed: {mixed}", plant_ip, 'debug', socketio)
+
             if phase == 'fill' and plant_ip and not mixed:
                 # Get system_volume from plant data
                 with app.config['plant_lock']:
                     system_volume = app.config['plant_data'].get(plant_ip, {}).get('settings', {}).get('system_volume', 0)
                 if system_volume == 0 or system_volume == 'N/A':
                     log_feeding_feedback(f"No valid system_volume for {plant_ip}, skipping mixing", plant_ip, 'warning', socketio)
-                    time.sleep(1)
+                    eventlet.sleep(0.05)
                     continue
 
                 # Calculate target feed volume
@@ -94,9 +97,9 @@ def monitor_feed_mixing(socketio, app):
 
                 mixed = True
 
-                # Monitor feed total volume until target reached or phase changes
+                # Monitor feed total volume and phase
                 while True:
-                    with app.app_context():  # Refresh context inside loop for updated phase
+                    with app.app_context():  # Refresh context inside loop
                         phase = app.config.get('current_feeding_phase', 'idle')
                         plant_ip = app.config.get('current_plant_ip')
 
@@ -123,10 +126,11 @@ def monitor_feed_mixing(socketio, app):
                         if fresh_relay:
                             control_local_relay(fresh_relay, 'off', socketio, plant_ip)
                         log_feeding_feedback(f"Target feed volume {target_feed_volume:.2f} Gal reached for {plant_ip} (actual: {feed_total:.2f} Gal), turned off feed pump and relays", plant_ip, 'success', socketio)
+                        mixed = False
                         break
-                    time.sleep(0.5)  # Check more frequently
+                    eventlet.sleep(0.05)  # Faster check for volume and phase
 
             if mixed and phase != 'fill':
                 log_feeding_feedback(f"Feed mixing cycle for {plant_ip} already cleaned up or not needed", plant_ip, 'debug', socketio)
                 mixed = False  # Safety reset
-        time.sleep(0.5)  # Main loop sleep
+        eventlet.sleep(0.05)  # Faster main loop
