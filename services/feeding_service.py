@@ -146,7 +146,7 @@ def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retri
                     return True
             time.sleep(1)
             counter += 1
-            if counter % 5 == 0:
+            #if counter % 5 == 0:
                 #log_feeding_feedback(f"Current status for sensor {sensor_label}: triggered={current_triggered} for plant {plant_ip}", plant_ip, status='info', sio=sio)
         if not state_changed:
             log_feeding_feedback(f"Timeout waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} (attempt {attempt+1}/{retries})", plant_ip, status='warning', sio=sio)
