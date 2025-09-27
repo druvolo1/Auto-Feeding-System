@@ -17,7 +17,7 @@ from flask_socketio import SocketIO
 from status_namespace import StatusNamespace, set_socketio_instance
 
 # Import debug_states from app to check notifications debug flag
-from api import debug_states
+from app import debug_states
 
 # Global flag to track if feeding should be stopped
 stop_feeding_flag = False
@@ -69,7 +69,7 @@ def send_notification(alert_text: str):
     Send notification to Discord and/or Telegram if enabled.
     Defined in app.py, imported here for clarity but will use app's version.
     """
-    from api import send_notification as app_send_notification
+    from app import send_notification as app_send_notification
     app_send_notification(alert_text)
 
 def control_valve(plant_ip, valve_ip, valve_id, action, sio=None):
@@ -312,7 +312,7 @@ def start_feeding_sequence():
                 response.raise_for_status()
                 log_feeding_feedback(f"Reset feeding_in_progress for plant {plant_ip} due to error", plant_ip, status='info', sio=socketio_instance)
             except Exception as e2:
-                log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e2)}", plant_ip, status='error', sio=socketio_instance)
+                log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e2)}", plant_ip, status='error', sio=sio)
                 send_notification(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e2)}")
             continue
 
