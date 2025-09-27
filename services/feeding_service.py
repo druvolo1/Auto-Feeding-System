@@ -221,6 +221,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                         low_flow_start = time.time()
                     if time.time() - low_flow_start >= min_flow_check_delay:
                         log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, status='warning', sio=sio)
+                        send_notification(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill")
                         control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
                         drain_complete = {'status': True, 'reason': 'low_flow'}
                         return
