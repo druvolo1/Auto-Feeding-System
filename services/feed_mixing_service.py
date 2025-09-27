@@ -3,7 +3,6 @@ import requests
 from flask import current_app
 from utils.settings_utils import load_settings
 from services.feed_flow_service import get_total_volume as get_feed_total_volume
-from services.feed_pump_service import control_feed_pump
 from services.log_service import log_event
 from .feeding_service import log_feeding_feedback, stop_feeding_flag, send_notification
 
@@ -26,6 +25,28 @@ def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'
     except Exception as e:
         log_feeding_feedback(f"Error controlling local relay {relay_id}: {str(e)}", plant_ip, 'error', sio)
         send_notification(f"Error controlling local relay {relay_id}: {str(e)}")
+        return False
+
+def control_feed_pump_api(action, sio=None, plant_ip=None):
+    """
+    Control the feed pump via the /api/feed_pump/{action} endpoint.
+    action: 'on' or 'off'
+    """
+    url = f"http://127.0.0.1:8000/api/feed_pump/{action}"
+    try:
+        response = requests.post(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        if data.get('status') == 'success':
+            log_feeding_feedback(f"Feed pump turned {action.upper()}", plant_ip, 'success', sio)
+            return True
+        else:
+            log_feeding_feedback(f"Failed to turn {action} feed pump: {data.get('error')}", plant_ip, 'error', sio)
+            send_notification(f"Failed to turn {action} feed pump: {data.get('error')}")
+            return False
+    except Exception as e:
+        log_feeding_feedback(f"Error controlling feed pump via API ({action}): {str(e)}", plant_ip, 'error', sio)
+        send_notification(f"Error controlling feed pump via API ({action}): {str(e)}")
         return False
 
 def monitor_feed_mixing(socketio, app):
@@ -58,8 +79,8 @@ def monitor_feed_mixing(socketio, app):
                 feed_relay = settings.get('relay_ports', {}).get('feed_water')
                 fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
 
-                # Turn on feed pump
-                control_feed_pump(state=1)
+                # Turn on feed pump via API
+                control_feed_pump_api('on', socketio, plant_ip)
 
                 # Turn on fresh relay (if defined)
                 if fresh_relay:
@@ -92,6 +113,6 @@ def monitor_feed_mixing(socketio, app):
                     fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
                     if fresh_relay:
                         control_local_relay(fresh_relay, 'off', socketio)
-                    control_feed_pump(state=0)
+                    control_feed_pump_api('off', socketio)
                     log_feeding_feedback(f"Completed post-fill cleanup for {plant_ip}", plant_ip, 'info', socketio)
         time.sleep(1)
