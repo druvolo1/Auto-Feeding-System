@@ -807,22 +807,29 @@
 
         <!-- Nutrient Feed Pump Section -->
         <div class="data-container">
-            <h3>Nutrient Feed Pump</h2>
-            <form id="feed-pump-form">
+           <h2>Nutrient Feed Pump</h2>
+            <div>
+                <label>Select Pump Control Mode:</label>
+                <div>
+                    <input type="radio" id="pump-mode-io" name="pump-mode" value="io" checked>
+                    <label for="pump-mode-io">IO</label>
+                    <input type="radio" id="pump-mode-shelly" name="pump-mode" value="shelly">
+                    <label for="pump-mode-shelly">Shelly</label>
+                </div>
+            </div>
+            <div id="io-settings" style="display: block;">
                 <label>IO Number (for IO mode):</label>
-                <input type="text" id="feed-pump-io-number" placeholder="e.g., 25">
+                <input type="number" id="feed-pump-io-number" min="0">
+            </div>
+            <div id="shelly-settings" style="display: none;">
                 <label>IP Address (for Shelly mode):</label>
-                <input type="text" id="feed-pump-ip" placeholder="e.g., 172.16.1.93">
-                <label>
-                    <input type="radio" name="feed_pump_type" value="io" checked> IO
-                </label>
-                <label>
-                    <input type="radio" name="feed_pump_type" value="shelly"> Shelly
-                </label>
-                <button type="submit">Save Feed Pump Settings</button>
-            </form>
-            <button onclick="fetch('/api/feed_pump/on', {method: 'POST'})">On</button>
-            <button onclick="fetch('/api/feed_pump/off', {method: 'POST'})">Off</button>
+                <input type="text" id="feed-pump-ip" placeholder="Enter IP address">
+            </div>
+            <button onclick="saveFeedPumpSettings()">Save Feed Pump Settings</button>
+            <div>
+                <button onclick="togglePump('on')">On</button>
+                <button onclick="togglePump('off')">Off</button>
+            </div>
         </div>
 
         <!-- Drain Flow Settings -->
