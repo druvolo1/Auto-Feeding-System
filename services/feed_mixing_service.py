@@ -4,7 +4,6 @@ import requests
 from flask import Flask, current_app
 from datetime import datetime
 from services.valve_relay_service import turn_on_relay, turn_off_relay
-from services.feed_pump_service import control_feed_pump as pump_control
 from utils.settings_utils import load_settings
 from .log_service import log_event
 from services.feed_flow_service import get_total_volume as get_feed_total_volume, get_latest_flow_rate as get_latest_feed_flow_rate
@@ -56,48 +55,27 @@ def control_local_valve(relay_port, action, valve_type, sio=None, app=None):
 
 def control_feed_pump(action, sio=None, app=None):
     """
-    Control the feed pump based on its configuration (IO or Shelly).
+    Control the feed pump using API endpoints /feed_pump/on or /feed_pump/off.
     """
     settings = load_settings()
-    feed_pump = settings.get('feed_pump', {})
-    pump_type = feed_pump.get('type', 'io')
-    io_number = feed_pump.get('io_number')
-    ip_address = feed_pump.get('ip_address')
-    log_mixing_feedback(f"Attempting to control feed pump: action={action}, pump_type={pump_type}, io_number={io_number}, ip_address={ip_address}", status='debug', sio=sio, app=app)
+    base_url = settings.get('api_base_url', 'http://localhost:8000')  # Default to localhost:8000
+    log_mixing_feedback(f"Attempting to control feed pump: action={action}, base_url={base_url}", status='debug', sio=sio, app=app)
     
     try:
-        if pump_type == 'shelly' and ip_address:
-            # Use API endpoint for Shelly control
-            endpoint = f"http://{ip_address}/feed_pump/{action}"
-            response = requests.post(endpoint, timeout=5)
-            if response.status_code == 200 and response.json().get('status') == 'success':
-                log_mixing_feedback(f"Feed pump (Shelly {ip_address}) turned {action}", status='success', sio=sio, app=app)
-                return True
-            else:
-                log_mixing_feedback(f"Failed to turn {action} feed pump (Shelly {ip_address}): {response.text}", status='error', sio=sio, app=app)
-                from app import send_notification
-                send_notification(f"Failed to turn {action} feed pump (Shelly {ip_address}): {response.text}")
-                return False
-        elif pump_type == 'io' and io_number:
-            state = 1 if action == 'on' else 0
-            success = pump_control(io_number=io_number, pump_type=pump_type, state=state, sio=sio, app=app)
-            if success:
-                log_mixing_feedback(f"Feed pump (IO {io_number}) turned {action}", status='success', sio=sio, app=app)
-                return True
-            else:
-                log_mixing_feedback(f"Failed to turn {action} feed pump (IO {io_number}): Control function returned False", status='error', sio=sio, app=app)
-                from app import send_notification
-                send_notification(f"Failed to turn {action} feed pump (IO {io_number}): Control function returned False")
-                return False
+        endpoint = f"{base_url}/feed_pump/{action}"
+        response = requests.post(endpoint, timeout=5)
+        if response.status_code == 200 and response.json().get('status') == 'success':
+            log_mixing_feedback(f"Feed pump turned {action} via API", status='success', sio=sio, app=app)
+            return True
         else:
-            log_mixing_feedback(f"Invalid feed pump configuration: type={pump_type}, io_number={io_number}, ip_address={ip_address}", status='error', sio=sio, app=app)
+            log_mixing_feedback(f"Failed to turn {action} feed pump via API: {response.text}", status='error', sio=sio, app=app)
             from app import send_notification
-            send_notification(f"Invalid feed pump configuration: type={pump_type}, io_number={io_number}, ip_address={ip_address}")
+            send_notification(f"Failed to turn {action} feed pump via API: {response.text}")
             return False
     except Exception as e:
-        log_mixing_feedback(f"Failed to turn {action} feed pump: {str(e)}", status='error', sio=sio, app=app)
+        log_mixing_feedback(f"Failed to turn {action} feed pump via API: {str(e)}", status='error', sio=sio, app=app)
         from app import send_notification
-        send_notification(f"Failed to turn {action} feed pump: {str(e)}")
+        send_notification(f"Failed to turn {action} feed pump via API: {str(e)}")
         return False
 
 def wait_for_full_sensor(plant_ip, expected_triggered, timeout=600, sio=None, app=None):
