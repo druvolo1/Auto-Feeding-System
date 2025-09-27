@@ -104,6 +104,7 @@ def monitor_feed_mixing(socketio, app):
                         if fresh_relay:
                             control_local_relay(fresh_relay, 'off', socketio, plant_ip)
                         log_feeding_feedback(f"Feed mixing interrupted by user for {plant_ip}, turned off pump and relays", plant_ip, 'error', socketio)
+                        mixed = False  # Reset to allow restart on next fill
                         break
 
                     feed_total = get_feed_total_volume()
@@ -119,7 +120,15 @@ def monitor_feed_mixing(socketio, app):
                     time.sleep(1)
             else:
                 if mixed and phase != 'fill':
-                    # Reset flag when leaving fill phase
-                    mixed = False
-                    log_feeding_feedback(f"Completed feed mixing cycle for {plant_ip}, reset mixed flag", plant_ip, 'info', socketio)
+                    # Ensure all components are off when leaving fill phase
+                    settings = load_settings()
+                    feed_relay = settings.get('relay_ports', {}).get('feed_water')
+                    fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
+                    control_feed_pump_api('off', socketio, plant_ip)
+                    if feed_relay:
+                        control_local_relay(feed_relay, 'off', socketio, plant_ip)
+                    if fresh_relay:
+                        control_local_relay(fresh_relay, 'off', socketio, plant_ip)
+                    log_feeding_feedback(f"Completed feed mixing cycle for {plant_ip}, turned off pump and relays", plant_ip, 'info', socketio)
+                    mixed = False  # Reset flag
         time.sleep(1)
