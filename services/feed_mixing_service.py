@@ -3,7 +3,7 @@ import time
 from flask import current_app
 from datetime import datetime
 from services.valve_relay_service import turn_on_relay, turn_off_relay
-from services.feed_pump_service import turn_on_feed_pump, turn_off_feed_pump
+from services.feed_pump_service import control_feed_pump
 from utils.settings_utils import load_settings
 from .log_service import log_event
 from .feeding_service import feeding_sequence_active
@@ -55,14 +55,19 @@ def control_feed_pump(action, sio=None):
     settings = load_settings()
     feed_pump = settings.get('feed_pump', {})
     pump_type = feed_pump.get('type')
+    io_number = feed_pump.get('io_number')
     try:
-        if pump_type == 'io' and feed_pump.get('io_number'):
-            if action == 'on':
-                turn_on_feed_pump()
+        if pump_type == 'io' and io_number:
+            state = 1 if action == 'on' else 0
+            success = control_feed_pump(io_number=io_number, pump_type=pump_type, state=state)
+            if success:
+                log_mixing_feedback(f"Feed pump (IO {io_number}) turned {action}", status='success', sio=sio)
+                return True
             else:
-                turn_off_feed_pump()
-            log_mixing_feedback(f"Feed pump (IO {feed_pump['io_number']}) turned {action}", status='success', sio=sio)
-            return True
+                log_mixing_feedback(f"Failed to turn {action} feed pump (IO {io_number})", status='error', sio=sio)
+                from app import send_notification
+                send_notification(f"Failed to turn {action} feed pump (IO {io_number})")
+                return False
         # Add Shelly support if needed
         else:
             log_mixing_feedback(f"Invalid feed pump configuration", status='error', sio=sio)
