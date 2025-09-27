@@ -337,9 +337,12 @@ def start_feeding_sequence():
         elif flow_result.get('reason') == 'sensor_triggered':
             log_feeding_feedback(f"Drain completed for {plant_ip} due to empty sensor trigger in flow monitor", plant_ip, status='success', sio=socketio_instance)
 
-        # Prioritize sensor: Proceed to fill if sensor triggered
-        if sensor_result:
-            log_feeding_feedback(f"Empty sensor triggered for {plant_ip}, proceeding to fill", plant_ip, status='info', sio=socketio_instance)
+        # Prioritize sensor or low flow: Proceed to fill if sensor triggered or low flow detected
+        if sensor_result or (not flow_result['success'] and flow_result['reason'] == 'low_flow'):
+            if not sensor_result and flow_result['reason'] == 'low_flow':
+                log_feeding_feedback(f"Low drain flow detected, but empty sensor not triggered. Possible root obstruction on sensor. Considering bucket empty and proceeding to fill.", plant_ip, status='warning', sio=socketio_instance)
+            else:
+                log_feeding_feedback(f"Empty sensor triggered for {plant_ip}, proceeding to fill", plant_ip, status='info', sio=socketio_instance)
         else:
             if stop_feeding_flag:
                 control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=socketio_instance)
