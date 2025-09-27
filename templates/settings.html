@@ -13,13 +13,13 @@
             margin-bottom: 10px;
         }
         .calibration-row label {
-            width: 150px; /* Increased from 120px for more space */
+            width: 150px;
             margin-right: 10px;
         }
         .calibration-row input {
             flex: 1;
-            min-width: 150px; /* Added minimum width for better visibility */
-            padding: 5px; /* Added padding for usability */
+            min-width: 150px;
+            padding: 5px;
         }
         .relay-port-select {
             width: 100px;
@@ -55,10 +55,13 @@
         .feed-pump-options {
             display: flex;
             align-items: center;
+            margin-bottom: 10px;
         }
-        .feed-pump-options input[type="text"] {
-            width: 60px;
-            margin-left: 5px;
+        .feed-pump-options input[type="radio"] {
+            margin-right: 5px;
+        }
+        .feed-pump-options label {
+            margin-right: 15px;
         }
         .tooltip {
             margin-left: 10px;
@@ -123,7 +126,7 @@
                 const isIO = document.getElementById('feed-pump-io')?.checked;
                 const isShelly = document.getElementById('feed-pump-shelly')?.checked;
 
-                if (isIO && ioNumber && !isShelly && !ip) {
+                if (isIO && ioNumber) {
                     fetch('/api/settings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -139,7 +142,7 @@
                             }
                         })
                         .catch(error => console.error('Error saving feed pump settings:', error));
-                } else if (isShelly && ip && !isIO && !ioNumber) {
+                } else if (isShelly && ip) {
                     fetch('/api/settings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -156,45 +159,36 @@
                         })
                         .catch(error => console.error('Error saving feed pump settings:', error));
                 } else {
-                    alert('Please select either a valid IO number with IO checked or a valid IP address with Shelly checked. Only one option can be active.');
+                    alert('Please select a mode and provide a valid IO number or IP address.');
                 }
             });
         }
 
-        // Handle IO checkbox change
-        const ioCheckbox = document.getElementById('feed-pump-io');
+        // Handle feed pump mode toggle
+        const ioRadio = document.getElementById('feed-pump-io');
+        const shellyRadio = document.getElementById('feed-pump-shelly');
         const ipInput = document.getElementById('feed-pump-ip');
         const ioNumberInput = document.getElementById('feed-pump-io-number');
-        const shellyCheckbox = document.getElementById('feed-pump-shelly');
-        if (ioCheckbox && ipInput && ioNumberInput && shellyCheckbox) {
-            ioCheckbox.addEventListener('change', function() {
-                if (ioCheckbox.checked) {
-                    ipInput.value = ''; // Clear IP field
+        if (ioRadio && shellyRadio && ipInput && ioNumberInput) {
+            ioRadio.addEventListener('change', function() {
+                if (ioRadio.checked) {
                     ipInput.disabled = true;
-                    shellyCheckbox.checked = false;
-                    shellyCheckbox.disabled = true;
-                } else {
-                    ipInput.disabled = false;
-                    shellyCheckbox.disabled = false;
+                    ipInput.value = '';
+                    ioNumberInput.disabled = false;
                 }
             });
-
-            shellyCheckbox.addEventListener('change', function() {
-                if (shellyCheckbox.checked) {
-                    ioNumberInput.value = ''; // Clear IO number field
+            shellyRadio.addEventListener('change', function() {
+                if (shellyRadio.checked) {
                     ioNumberInput.disabled = true;
-                    ioCheckbox.checked = false;
-                    ioCheckbox.disabled = true;
-                } else {
-                    ioNumberInput.disabled = false;
-                    ioCheckbox.disabled = false;
+                    ioNumberInput.value = '';
+                    ipInput.disabled = false;
                 }
             });
         }
 
         // Handle feed pump on/off buttons with debounce
         let lastClickTime = 0;
-        const debounceTime = 500; // 500ms debounce
+        const debounceTime = 500;
 
         const feedPumpOnButton = document.getElementById('feed-pump-on');
         if (feedPumpOnButton) {
@@ -405,25 +399,20 @@
                 const drainCal = document.getElementById('drain-cal');
                 if (drainCal) drainCal.value = data.calibration_factors.drain || 28.390575;
 
-                // Load relay ports
                 const relayPorts = data.relay_ports || { feed_water: 1, fresh_water: 2 };
                 const feedPortEl = document.getElementById('feed-water-relay-port');
                 if (feedPortEl) feedPortEl.value = relayPorts.feed_water;
                 const freshPortEl = document.getElementById('fresh-water-relay-port');
                 if (freshPortEl) freshPortEl.value = relayPorts.fresh_water;
 
-                // Load nutrient concentration
                 const nutrientConcEl = document.getElementById('nutrient-conc');
                 if (nutrientConcEl) nutrientConcEl.value = data.nutrient_concentration || 1;
 
-                // Load and populate USB devices with pre-selection
                 data.usb_roles = data.usb_roles || {};
                 populateUsbDevices(data.usb_roles.valve_relay);
 
-                // Load relay statuses
                 loadRelayStatuses();
 
-                // Load feed pump settings
                 const feedPumpIp = document.getElementById('feed-pump-ip');
                 const feedPumpIoNumber = document.getElementById('feed-pump-io-number');
                 const feedPumpIo = document.getElementById('feed-pump-io');
@@ -436,16 +425,16 @@
                     feedPumpShelly.checked = feedPump.type === 'shelly';
                     if (feedPumpIo.checked) {
                         feedPumpIp.disabled = true;
-                        feedPumpShelly.disabled = true;
-                        feedPumpShelly.checked = false;
+                        feedPumpIoNumber.disabled = false;
                     } else if (feedPumpShelly.checked) {
                         feedPumpIoNumber.disabled = true;
-                        feedPumpIo.disabled = true;
-                        feedPumpIo.checked = false;
+                        feedPumpIp.disabled = false;
+                    } else {
+                        feedPumpIp.disabled = true;
+                        feedPumpIoNumber.disabled = true;
                     }
                 }
 
-                // Load drain flow settings with default values if not present
                 const drainFlowSettings = data.drain_flow_settings || {};
                 const activationFlow = document.getElementById('activation-flow-rate');
                 if (activationFlow) activationFlow.value = drainFlowSettings.activation_flow_rate !== undefined ? drainFlowSettings.activation_flow_rate : 0.2;
@@ -458,7 +447,6 @@
                 const maxDrainTime = document.getElementById('max-drain-time');
                 if (maxDrainTime) maxDrainTime.value = drainFlowSettings.max_drain_time !== undefined ? drainFlowSettings.max_drain_time : 600;
 
-                // Load notification settings
                 const discordEnabled = document.getElementById('discord-enabled');
                 if (discordEnabled) discordEnabled.checked = data.discord_enabled || false;
                 const discordWebhookUrl = document.getElementById('discord-webhook-url');
@@ -755,7 +743,6 @@
             <button class="small-btn" onclick="saveNutrientConcentration()">Save Nutrient Concentration</button>
         </div>
 
-        <!-- Valve Relay Module Form -->
         <div class="data-container">
             <h3>Valve Relay Module</h3>
             <form id="valve-relay-form">
@@ -770,9 +757,7 @@
             <button onclick="loadSettings()">Rescan USB Devices</button>
         </div>
 
-        <!-- Relay Sections Side by Side -->
         <div class="relay-sections">
-            <!-- Valve Relay Port Assignments -->
             <div class="relay-assignments data-container">
                 <h3>Valve Relay Port Assignments</h3>
                 <form id="relay-port-form">
@@ -792,7 +777,6 @@
                 </form>
             </div>
 
-            <!-- Relay Testing -->
             <div class="relay-testing data-container">
                 <h3>Relay Testing</h3>
                 <p>Relay 1:</p>
@@ -805,34 +789,31 @@
             </div>
         </div>
 
-        <!-- Nutrient Feed Pump Section -->
         <div class="data-container">
-           <h2>Nutrient Feed Pump</h2>
-            <div>
-                <label>Select Pump Control Mode:</label>
-                <div>
-                    <input type="radio" id="pump-mode-io" name="pump-mode" value="io" checked>
-                    <label for="pump-mode-io">IO</label>
-                    <input type="radio" id="pump-mode-shelly" name="pump-mode" value="shelly">
-                    <label for="pump-mode-shelly">Shelly</label>
+            <h3>Nutrient Feed Pump</h3>
+            <form id="feed-pump-form">
+                <div class="feed-pump-options">
+                    <label>Pump Control Mode:</label>
+                    <input type="radio" id="feed-pump-io" name="feed-pump-type" value="io">
+                    <label for="feed-pump-io">IO</label>
+                    <input type="radio" id="feed-pump-shelly" name="feed-pump-type" value="shelly">
+                    <label for="feed-pump-shelly">Shelly</label>
                 </div>
-            </div>
-            <div id="io-settings" style="display: block;">
-                <label>IO Number (for IO mode):</label>
-                <input type="number" id="feed-pump-io-number" min="0">
-            </div>
-            <div id="shelly-settings" style="display: none;">
-                <label>IP Address (for Shelly mode):</label>
-                <input type="text" id="feed-pump-ip" placeholder="Enter IP address">
-            </div>
-            <button onclick="saveFeedPumpSettings()">Save Feed Pump Settings</button>
-            <div>
-                <button onclick="togglePump('on')">On</button>
-                <button onclick="togglePump('off')">Off</button>
-            </div>
+                <div class="calibration-row" id="io-settings">
+                    <label>IO Number:</label>
+                    <input type="number" id="feed-pump-io-number" placeholder="e.g., 17" min="0">
+                </div>
+                <div class="calibration-row" id="shelly-settings">
+                    <label>IP Address:</label>
+                    <input type="text" id="feed-pump-ip" placeholder="e.g., 192.168.1.100">
+                </div>
+                <button type="submit">Save Feed Pump Settings</button>
+            </form>
+            <br>
+            <button id="feed-pump-on" class="small-btn relay-button" onclick="turnOnFeedPump()">On</button>
+            <button id="feed-pump-off" class="small-btn relay-button" onclick="turnOffFeedPump()">Off</button>
         </div>
 
-        <!-- Drain Flow Settings -->
         <div class="data-container">
             <h3>Drain Flow Settings</h3>
             <form id="drain-flow-form">
@@ -865,7 +846,6 @@
             </form>
         </div>
 
-        <!-- Notifications Section -->
         <div class="data-container">
             <h3>Notifications</h3>
             <div>
@@ -919,7 +899,6 @@
                 </form>
             </div>
         </div>
-
     </main>
 </body>
 </html>
