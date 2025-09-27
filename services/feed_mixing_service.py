@@ -3,7 +3,7 @@ import time
 from flask import Flask, current_app
 from datetime import datetime
 from services.valve_relay_service import turn_on_relay, turn_off_relay
-from services.feed_pump_service import control_feed_pump as pump_control
+from services.feed_pump_service import control_feed_pump as pump_control  # Renamed to avoid recursion
 from utils.settings_utils import load_settings
 from .log_service import log_event
 from services.feed_flow_service import get_total_volume as get_feed_total_volume, get_latest_flow_rate as get_latest_feed_flow_rate
@@ -100,14 +100,18 @@ def wait_for_full_sensor(plant_ip, initial_triggered, expected_triggered, timeou
     counter = 0
     state_changed = False
     while time.time() - start_time < timeout:
+        if not app.config.get('feeding_sequence_active', False):
+            log_mixing_feedback(f"Feeding sequence ended during full sensor wait for {plant_ip}", status='info', sio=sio, app=app)
+            return False
         with app.app_context():
             with app.config['plant_lock']:
                 plant_data = app.config['plant_data']
                 current_triggered = plant_data.get(plant_ip, {}).get('water_level', {}).get('sensor1', {}).get('triggered', initial_triggered)
-            if current_triggered == expected_triggered and (current_triggered != initial_triggered or initial_triggered == expected_triggered):
-                state_changed = True
-                log_mixing_feedback(f"Full sensor {sensor_label} reached expected state (triggered={expected_triggered}) for {plant_ip}", status='success', sio=sio, app=app)
-                return True
+            if current_triggered == expected_triggered:
+                if initial_triggered != expected_triggered or state_changed:
+                    log_mixing_feedback(f"Full sensor {sensor_label} reached expected state (triggered={expected_triggered}) for {plant_ip}", status='success', sio=sio, app=app)
+                    return True
+                state_changed = True  # Mark as changed if initial == expected
             if counter % 5 == 0:
                 log_mixing_feedback(f"Current full sensor status for {plant_ip}: triggered={current_triggered}", status='info', sio=sio, app=app)
         eventlet.sleep(1)
@@ -167,7 +171,7 @@ def monitor_feed_mixing(sio=None, app=None):
             nutrient_concentration = settings.get('nutrient_concentration', 1)
             relay_ports = settings.get('relay_ports', {})
             feed_valve_port = relay_ports.get('feed_water')
-            fresh_valve_port = settings.get('relay_ports', {}).get('fresh_water')
+            fresh_valve_port = relay_ports.get('fresh_water')
 
             if not all([feed_valve_port, fresh_valve_port]):
                 with app.app_context():
