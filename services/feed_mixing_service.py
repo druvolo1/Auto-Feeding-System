@@ -9,7 +9,6 @@ from .log_service import log_event
 from .feeding_service import feeding_sequence_active
 from services.feed_flow_service import get_total_volume as get_feed_total_volume, get_latest_flow_rate as get_latest_feed_flow_rate
 from services.fresh_flow_service import get_total_volume as get_fresh_total_volume, get_latest_flow_rate as get_latest_fresh_flow_rate
-from app import debug_states, app
 
 # Global flag for mixing
 stop_mixing_flag = False
@@ -19,7 +18,7 @@ def log_mixing_feedback(message, status='info', sio=None):
     Log mixing feedback to both the UI (via SocketIO) and feeding.jsonl.
     """
     if not sio:
-        with app.app_context():
+        with current_app.app_context():
             sio = current_app.extensions.get('socketio')
     if not sio:
         print(f"[WARNING] SocketIO not available for logging: {message}")
@@ -88,17 +87,20 @@ def monitor_feed_mixing(sio=None):
     Runs in a separate thread.
     """
     global stop_mixing_flag
-    log_mixing_feedback("Monitor feed mixing thread started", status='info', sio=sio)
+    with current_app.app_context():
+        log_mixing_feedback("Monitor feed mixing thread started", status='info', sio=sio)
     while True:
         try:
             if not feeding_sequence_active:
-                if debug_states.get('feeding', False):
-                    log_mixing_feedback("Feeding sequence not active, waiting", status='info', sio=sio)
+                with current_app.app_context():
+                    if current_app.config['debug_states'].get('feeding', False):
+                        log_mixing_feedback("Feeding sequence not active, waiting", status='info', sio=sio)
                 eventlet.sleep(1)
                 continue
 
             if stop_mixing_flag:
-                log_mixing_feedback("Stop mixing flag set, resetting", status='info', sio=sio)
+                with current_app.app_context():
+                    log_mixing_feedback("Stop mixing flag set, resetting", status='info', sio=sio)
                 stop_mixing_flag = False
                 eventlet.sleep(1)
                 continue
@@ -110,22 +112,25 @@ def monitor_feed_mixing(sio=None):
             fresh_valve_port = relay_ports.get('fresh_water')
 
             if not all([feed_valve_port, fresh_valve_port]):
-                log_mixing_feedback("Missing feed or fresh valve port configuration", status='error', sio=sio)
-                from app import send_notification
-                send_notification("Missing feed or fresh valve port configuration")
+                with current_app.app_context():
+                    log_mixing_feedback("Missing feed or fresh valve port configuration", status='error', sio=sio)
+                    from app import send_notification
+                    send_notification("Missing feed or fresh valve port configuration")
                 eventlet.sleep(1)
                 continue
 
             with current_app.config['plant_lock']:
                 plant_data = current_app.config['plant_data']
                 if not plant_data:
-                    log_mixing_feedback("No plant data available during active feeding, waiting", status='error', sio=sio)
+                    with current_app.app_context():
+                        log_mixing_feedback("No plant data available during active feeding, waiting", status='error', sio=sio)
                     eventlet.sleep(1)
                     continue
                 try:
                     plant_ip = list(plant_data.keys())[0]  # Adjust for multiple plants
                 except IndexError:
-                    log_mixing_feedback("No plants in plant_data during active feeding, waiting", status='error', sio=sio)
+                    with current_app.app_context():
+                        log_mixing_feedback("No plants in plant_data during active feeding, waiting", status='error', sio=sio)
                     eventlet.sleep(1)
                     continue
                 system_volume = plant_data[plant_ip]['settings'].get('system_volume', 5.5)
@@ -133,18 +138,21 @@ def monitor_feed_mixing(sio=None):
                 water_level = plant_data[plant_ip].get('water_level', {})
                 full_sensor_triggered = water_level.get('sensor1', {}).get('triggered', True)  # Assuming sensor1 is Full
 
-            log_mixing_feedback(f"Feeding active, starting mixing monitoring for {system_name}", status='info', sio=sio)
+            with current_app.app_context():
+                log_mixing_feedback(f"Feeding active, starting mixing monitoring for {system_name}", status='info', sio=sio)
 
             # Calculate targets: Handle nutrient_concentration = 0
             if nutrient_concentration == 0:
                 target_nutrient = 0
                 target_fresh = system_volume
-                log_mixing_feedback(f"Using only fresh water for {system_name} (nutrient_concentration=0, target volume {system_volume} Gal)", status='info', sio=sio)
+                with current_app.app_context():
+                    log_mixing_feedback(f"Using only fresh water for {system_name} (nutrient_concentration=0, target volume {system_volume} Gal)", status='info', sio=sio)
             else:
                 total_parts = nutrient_concentration + 1
                 target_nutrient = system_volume / total_parts
                 target_fresh = system_volume - target_nutrient
-                log_mixing_feedback(f"Target for {system_name}: {target_nutrient:.2f} Gal nutrient, {target_fresh:.2f} Gal fresh water (ratio {nutrient_concentration}:1)", status='info', sio=sio)
+                with current_app.app_context():
+                    log_mixing_feedback(f"Target for {system_name}: {target_nutrient:.2f} Gal nutrient, {target_fresh:.2f} Gal fresh water (ratio {nutrient_concentration}:1)", status='info', sio=sio)
 
             nutrient_volume = 0
             fresh_volume = 0
@@ -160,17 +168,19 @@ def monitor_feed_mixing(sio=None):
                     if control_feed_pump('on', sio=sio):
                         pump_on = True
                 else:
-                    log_mixing_feedback(f"Failed to start feed valve for {system_name}, aborting mixing", status='error', sio=sio)
-                    from app import send_notification
-                    send_notification(f"Failed to start feed valve for {system_name}")
+                    with current_app.app_context():
+                        log_mixing_feedback(f"Failed to start feed valve for {system_name}, aborting mixing", status='error', sio=sio)
+                        from app import send_notification
+                        send_notification(f"Failed to start feed valve for {system_name}")
                     eventlet.sleep(1)
                     continue
             if control_local_valve(fresh_valve_port, 'on', 'Fresh', sio=sio):
                 fresh_valve_on = True
             else:
-                log_mixing_feedback(f"Failed to start fresh valve for {system_name}, aborting mixing", status='error', sio=sio)
-                from app import send_notification
-                send_notification(f"Failed to start fresh valve for {system_name}")
+                with current_app.app_context():
+                    log_mixing_feedback(f"Failed to start fresh valve for {system_name}, aborting mixing", status='error', sio=sio)
+                    from app import send_notification
+                    send_notification(f"Failed to start fresh valve for {system_name}")
                 if feed_valve_on:
                     control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio)
                 if pump_on:
@@ -186,7 +196,8 @@ def monitor_feed_mixing(sio=None):
 
                 # Check volume limit with buffer to prevent overshoot
                 if total_volume >= system_volume - 0.01:
-                    log_mixing_feedback(f"Total volume reached for {system_name} ({total_volume:.2f} Gal), stopping mixing", status='info', sio=sio)
+                    with current_app.app_context():
+                        log_mixing_feedback(f"Total volume reached for {system_name} ({total_volume:.2f} Gal), stopping mixing", status='info', sio=sio)
                     break
 
                 # Check remote full sensor
@@ -195,39 +206,45 @@ def monitor_feed_mixing(sio=None):
                     full_sensor_triggered = water_level.get('sensor1', {}).get('triggered', True)
 
                 if not full_sensor_triggered:  # False means full
-                    log_mixing_feedback(f"Full sensor triggered for {system_name}, stopping mixing", status='success', sio=sio)
+                    with current_app.app_context():
+                        log_mixing_feedback(f"Full sensor triggered for {system_name}, stopping mixing", status='success', sio=sio)
                     break
 
                 # Debug logging for flow rates
                 if counter % 5 == 0:
-                    if debug_states.get('feed-flow', False):
-                        feed_flow_rate = get_latest_feed_flow_rate() or 0
-                        log_mixing_feedback(f"Feed flow for {system_name}: {feed_flow_rate:.2f} Gal/min, total: {nutrient_volume:.2f} Gal", status='info', sio=sio)
-                    if debug_states.get('fresh-flow', False):
-                        fresh_flow_rate = get_latest_fresh_flow_rate() or 0
-                        log_mixing_feedback(f"Fresh flow for {system_name}: {fresh_flow_rate:.2f} Gal/min, total: {fresh_volume:.2f} Gal", status='info', sio=sio)
+                    with current_app.app_context():
+                        if current_app.config['debug_states'].get('feed-flow', False):
+                            feed_flow_rate = get_latest_feed_flow_rate() or 0
+                            log_mixing_feedback(f"Feed flow for {system_name}: {feed_flow_rate:.2f} Gal/min, total: {nutrient_volume:.2f} Gal", status='info', sio=sio)
+                        if current_app.config['debug_states'].get('fresh-flow', False):
+                            fresh_flow_rate = get_latest_fresh_flow_rate() or 0
+                            log_mixing_feedback(f"Fresh flow for {system_name}: {fresh_flow_rate:.2f} Gal/min, total: {fresh_volume:.2f} Gal", status='info', sio=sio)
 
                 # Adjust for ratio if nutrient_concentration > 0
                 if nutrient_concentration > 0:
                     current_ratio = fresh_volume / nutrient_volume if nutrient_volume > 0 else float('inf')
                     if current_ratio < nutrient_concentration and fresh_valve_on:
-                        log_mixing_feedback(f"Pausing fresh valve for {system_name} (current ratio {current_ratio:.2f} < {nutrient_concentration})", status='info', sio=sio)
+                        with current_app.app_context():
+                            log_mixing_feedback(f"Pausing fresh valve for {system_name} (current ratio {current_ratio:.2f} < {nutrient_concentration})", status='info', sio=sio)
                         control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio)
                         fresh_valve_on = False
                     elif current_ratio > nutrient_concentration and not fresh_valve_on:
-                        log_mixing_feedback(f"Resuming fresh valve for {system_name} (current ratio {current_ratio:.2f} > {nutrient_concentration})", status='info', sio=sio)
+                        with current_app.app_context():
+                            log_mixing_feedback(f"Resuming fresh valve for {system_name} (current ratio {current_ratio:.2f} > {nutrient_concentration})", status='info', sio=sio)
                         if control_local_valve(fresh_valve_port, 'on', 'Fresh', sio=sio):
                             fresh_valve_on = True
 
                     if nutrient_volume >= target_nutrient and feed_valve_on:
-                        log_mixing_feedback(f"Nutrient target reached for {system_name} ({nutrient_volume:.2f} Gal), stopping feed valve and pump", status='info', sio=sio)
+                        with current_app.app_context():
+                            log_mixing_feedback(f"Nutrient target reached for {system_name} ({nutrient_volume:.2f} Gal), stopping feed valve and pump", status='info', sio=sio)
                         control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio)
                         control_feed_pump('off', sio=sio)
                         feed_valve_on = False
                         pump_on = False
 
                 if fresh_volume >= target_fresh and fresh_valve_on:
-                    log_mixing_feedback(f"Fresh water target reached for {system_name} ({fresh_volume:.2f} Gal), stopping fresh valve", status='info', sio=sio)
+                    with current_app.app_context():
+                        log_mixing_feedback(f"Fresh water target reached for {system_name} ({fresh_volume:.2f} Gal), stopping fresh valve", status='info', sio=sio)
                     control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio)
                     fresh_valve_on = False
 
@@ -242,9 +259,12 @@ def monitor_feed_mixing(sio=None):
             if fresh_valve_on:
                 control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio)
 
-            log_mixing_feedback(f"Mixing completed or stopped for {system_name}", status='success', sio=sio)
+            with current_app.app_context():
+                log_mixing_feedback(f"Mixing completed or stopped for {system_name}", status='success', sio=sio)
+
         except Exception as e:
-            log_mixing_feedback(f"Error in mixing loop: {str(e)}", status='error', sio=sio)
-            from app import send_notification
-            send_notification(f"Error in mixing loop: {str(e)}")
+            with current_app.app_context():
+                log_mixing_feedback(f"Error in mixing loop: {str(e)}", status='error', sio=sio)
+                from app import send_notification
+                send_notification(f"Error in mixing loop: {str(e)}")
             eventlet.sleep(1)

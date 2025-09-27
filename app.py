@@ -60,6 +60,7 @@ app.config['plant_data'] = {}
 app.config['plant_lock'] = Lock()
 app.config['plant_clients'] = {}
 app.config['reload_event'] = Event()
+app.config['debug_states'] = debug_states  # Add debug_states to app config
 
 socketio = SocketIO(async_mode="eventlet", cors_allowed_origins="*")
 socketio.init_app(app)
@@ -383,7 +384,7 @@ def start_threads():
         print("[INIT] Starting plants status broadcast thread...")
         eventlet.spawn(broadcast_plants_status)
         print("[INIT] Starting feed mixing monitor thread...")
-        eventlet.spawn(monitor_feed_mixing)  # Start the mixing monitor
+        eventlet.spawn(monitor_feed_mixing, socketio)  # Pass socketio instance
     except Exception as e:
         print(f"[ERROR] Failed to start threads: {e}")
         log_feeding_feedback(f"Failed to start threads: {str(e)}", status='error')
