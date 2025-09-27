@@ -34,7 +34,7 @@ valve_relay_blueprint = None
 feed_level_blueprint = None
 feed_pump_blueprint = None
 feeding_blueprint = None
-feed_mixing_blueprint = None  # New blueprint
+feed_mixing_blueprint = None
 
 # Services
 from services.fresh_flow_service import get_latest_flow_rate as get_latest_fresh_flow_rate, get_total_volume as get_fresh_total_volume, reset_total as reset_fresh_total, flow_reader as fresh_flow_reader
@@ -43,7 +43,7 @@ from services.drain_flow_service import get_latest_flow_rate as get_latest_drain
 from services.valve_relay_service import reinitialize_relay_service, get_relay_status
 from services.feed_level_service import get_feed_level
 from services.log_service import log_event
-from services.feed_mixing_service import monitor_feed_mixing  # New service
+from services.feed_mixing_service import monitor_feed_mixing
 
 # Status namespace
 from status_namespace import StatusNamespace, set_socketio_instance
@@ -60,7 +60,7 @@ app.config['plant_data'] = {}
 app.config['plant_lock'] = Lock()
 app.config['plant_clients'] = {}
 app.config['reload_event'] = Event()
-app.config['debug_states'] = debug_states  # Add debug_states to app config
+app.config['debug_states'] = debug_states
 
 socketio = SocketIO(async_mode="eventlet", cors_allowed_origins="*")
 socketio.init_app(app)
@@ -80,7 +80,7 @@ def register_blueprints():
     from api.feed_level import feed_level_blueprint
     from api.feed_pump import feed_pump_blueprint
     from api.feeding import feeding_blueprint
-    from api.feed_mixing import feed_mixing_blueprint  # New
+    from api.feed_mixing import feed_mixing_blueprint
 
     app.register_blueprint(fresh_flow_blueprint, url_prefix='/api/fresh_flow')
     app.register_blueprint(feed_flow_blueprint, url_prefix='/api/feed_flow')
@@ -92,7 +92,7 @@ def register_blueprints():
     app.register_blueprint(feed_level_blueprint, url_prefix='/api/feed_level')
     app.register_blueprint(feed_pump_blueprint, url_prefix='/api/feed_pump')
     app.register_blueprint(feeding_blueprint, url_prefix='/api/feeding')
-    app.register_blueprint(feed_mixing_blueprint, url_prefix='/api/feed_mixing')  # New
+    app.register_blueprint(feed_mixing_blueprint, url_prefix='/api/feed_mixing')
 
 # Call register_blueprints after app setup
 register_blueprints()
@@ -384,7 +384,7 @@ def start_threads():
         print("[INIT] Starting plants status broadcast thread...")
         eventlet.spawn(broadcast_plants_status)
         print("[INIT] Starting feed mixing monitor thread...")
-        eventlet.spawn(monitor_feed_mixing, socketio)  # Pass socketio instance
+        eventlet.spawn(monitor_feed_mixing, socketio, app)  # Pass socketio and app
     except Exception as e:
         print(f"[ERROR] Failed to start threads: {e}")
         log_feeding_feedback(f"Failed to start threads: {str(e)}", status='error')
