@@ -65,7 +65,7 @@ def control_feed_pump(action, sio=None, app=None):
     try:
         if pump_type == 'io' and io_number:
             state = 1 if action == 'on' else 0
-            success = control_feed_pump(io_number=io_number, pump_type=pump_type, state=state)
+            success = control_feed_pump(pin=io_number, state=state)  # Updated to match expected signature
             if success:
                 log_mixing_feedback(f"Feed pump (IO {io_number}) turned {action}", status='success', sio=sio, app=app)
                 return True
@@ -84,6 +84,38 @@ def control_feed_pump(action, sio=None, app=None):
         from app import send_notification
         send_notification(f"Failed to turn {action} feed pump: {str(e)}")
         return False
+
+def wait_for_full_sensor(plant_ip, initial_triggered, expected_triggered, timeout=600, sio=None, app=None):
+    """
+    Wait for the full sensor to reach the expected triggered state with a state change.
+    """
+    with app.app_context():
+        with app.config['plant_lock']:
+            plant_data = app.config['plant_data']
+            water_level = plant_data.get(plant_ip, {}).get('water_level', {})
+            sensor_label = water_level.get('sensor1', {}).get('label', 'sensor1')
+        log_mixing_feedback(f"Waiting for full sensor {sensor_label} to change from triggered={initial_triggered} to {expected_triggered} for {plant_ip}", status='info', sio=sio, app=app)
+    
+    start_time = time.time()
+    counter = 0
+    state_changed = False
+    while time.time() - start_time < timeout:
+        with app.app_context():
+            with app.config['plant_lock']:
+                plant_data = app.config['plant_data']
+                current_triggered = plant_data.get(plant_ip, {}).get('water_level', {}).get('sensor1', {}).get('triggered', initial_triggered)
+            if current_triggered == expected_triggered and current_triggered != initial_triggered:
+                state_changed = True
+                log_mixing_feedback(f"Full sensor {sensor_label} reached expected state (triggered={expected_triggered}) for {plant_ip}", status='success', sio=sio, app=app)
+                return True
+            if counter % 5 == 0:
+                log_mixing_feedback(f"Current full sensor status for {plant_ip}: triggered={current_triggered}", status='info', sio=sio, app=app)
+        eventlet.sleep(1)
+        counter += 1
+    log_mixing_feedback(f"Timeout waiting for full sensor {sensor_label} to change to triggered={expected_triggered} for {plant_ip}", status='error', sio=sio, app=app)
+    from app import send_notification
+    send_notification(f"Timeout waiting for full sensor {sensor_label} to change to triggered={expected_triggered} for {plant_ip}")
+    return False
 
 def monitor_feed_mixing(sio=None, app=None):
     """
@@ -153,8 +185,8 @@ def monitor_feed_mixing(sio=None, app=None):
                     system_volume = plant_data[plant_ip]['settings'].get('system_volume', 5.5)
                     system_name = plant_data[plant_ip].get('system_name', plant_ip)
                     water_level = plant_data[plant_ip].get('water_level', {})
-                    full_sensor_triggered = water_level.get('sensor1', {}).get('triggered', True)
-                    log_mixing_feedback(f"System details: name={system_name}, volume={system_volume}, full_sensor_triggered={full_sensor_triggered}", status='debug', sio=sio, app=app)
+                    initial_full_sensor_triggered = water_level.get('sensor1', {}).get('triggered', True)
+                    log_mixing_feedback(f"System details: name={system_name}, volume={system_volume}, initial_full_sensor_triggered={initial_full_sensor_triggered}", status='debug', sio=sio, app=app)
 
             with app.app_context():
                 log_mixing_feedback(f"Feeding active, starting mixing monitoring for {system_name}", status='info', sio=sio, app=app)
@@ -181,6 +213,7 @@ def monitor_feed_mixing(sio=None, app=None):
             with app.app_context():
                 log_mixing_feedback(f"Starting valve and pump control for {system_name}", status='debug', sio=sio, app=app)
 
+            # Start mixing: Turn on valves and pump based on concentration
             if nutrient_concentration > 0:
                 if control_local_valve(feed_valve_port, 'on', 'Feed', sio=sio, app=app):
                     feed_valve_on = True
@@ -209,6 +242,21 @@ def monitor_feed_mixing(sio=None, app=None):
 
             with app.app_context():
                 log_mixing_feedback(f"Entered mixing loop for {system_name}, feed_valve_on={feed_valve_on}, fresh_valve_on={fresh_valve_on}, pump_on={pump_on}", status='debug', sio=sio, app=app)
+
+            # Wait for full sensor to transition from True to False
+            if not wait_for_full_sensor(plant_ip, initial_full_sensor_triggered, False, timeout=600, sio=sio, app=app):
+                with app.app_context():
+                    log_mixing_feedback(f"Failed to detect full sensor transition for {system_name}, stopping mixing", status='error', sio=sio, app=app)
+                    from app import send_notification
+                    send_notification(f"Failed to detect full sensor transition for {system_name}")
+                if feed_valve_on:
+                    control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio, app=app)
+                if pump_on:
+                    control_feed_pump('off', sio=sio, app=app)
+                if fresh_valve_on:
+                    control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio, app=app)
+                eventlet.sleep(1)
+                continue
 
             while app.config.get('feeding_sequence_active', False) and not stop_mixing_flag:
                 nutrient_volume = get_feed_total_volume() or 0
