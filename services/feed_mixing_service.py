@@ -65,7 +65,7 @@ def control_feed_pump(action, sio=None, app=None):
     try:
         if pump_type == 'io' and io_number:
             state = 1 if action == 'on' else 0
-            success = control_feed_pump(pin=io_number, state=state)  # Updated to match expected signature
+            success = control_feed_pump(io_number=io_number, pump_type=pump_type, state=state)
             if success:
                 log_mixing_feedback(f"Feed pump (IO {io_number}) turned {action}", status='success', sio=sio, app=app)
                 return True
