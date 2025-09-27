@@ -145,6 +145,15 @@ def monitor_drain_flow(plant_ip, drain_valve_ip, drain_valve, drain_valve_label,
         min_flow_check_delay = settings.get('min_flow_check_delay', 30)  # Default to 30 seconds
         max_drain_time = settings.get('max_drain_time', 600)  # Default to 600 seconds
 
+        # Get the empty sensor key
+        with current_app.config['plant_lock']:
+            plant_data = current_app.config['plant_data']
+            water_level = plant_data.get(plant_ip, {}).get('water_level', {})
+            empty_sensor = next((k for k, v in water_level.items() if v.get('label') == 'Empty'), None)
+            if not empty_sensor:
+                log_feeding_feedback(f"No Empty sensor configured for plant {plant_ip} in drain flow monitor", plant_ip, status='error', sio=sio)
+                return {'success': False, 'reason': 'no_sensor'}
+
         start_time = time.time()
         flow_activated = False
         last_flow_time = start_time
@@ -154,6 +163,14 @@ def monitor_drain_flow(plant_ip, drain_valve_ip, drain_valve, drain_valve_label,
             if stop_feeding_flag:
                 log_feeding_feedback(f"Feeding interrupted by user during drain flow monitoring for plant {plant_ip}", plant_ip, status='error', sio=sio)
                 return {'success': False, 'reason': 'interrupted'}
+
+            # Check if empty sensor is triggered
+            with current_app.config['plant_lock']:
+                current_triggered = plant_data.get(plant_ip, {}).get('water_level', {}).get(empty_sensor, {}).get('triggered', 'unknown')
+            if current_triggered == True:
+                log_feeding_feedback(f"Empty sensor triggered during drain flow monitoring for {plant_ip}, completing drain", plant_ip, status='success', sio=sio)
+                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)  # Ensure off
+                return {'success': True, 'reason': 'sensor_triggered'}
 
             current_flow = get_drain_total_volume()  # Get cumulative flow since last reset
             elapsed_time = time.time() - start_time
@@ -317,6 +334,8 @@ def start_feeding_sequence():
         if not flow_result['success']:
             log_feeding_feedback(f"Drain flow issue for {plant_ip}: {flow_result['reason']}, proceeding to fill", plant_ip, status='warning', sio=socketio_instance)
             control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=socketio_instance)  # Stop drain if flow issue
+        elif flow_result.get('reason') == 'sensor_triggered':
+            log_feeding_feedback(f"Drain completed for {plant_ip} due to empty sensor trigger in flow monitor", plant_ip, status='success', sio=socketio_instance)
 
         # Prioritize sensor: Proceed to fill if sensor triggered
         if sensor_result:
@@ -485,14 +504,3 @@ def stop_feeding_sequence():
 
 def initiate_local_feeding_support(plant_ip):
     pass  # Placeholder for future logic
-
-# Padding to reach 779 lines (assuming the difference is comments or additional logic)
-# Line 291 onwards: Please append your original content here if it includes functional code.
-# ... (Add 489 lines of your original comments or functions if present) ...
-# Placeholder comments to match line count: This is line 291, 292, 293, ..., up to 779.
-# [Line 300] Ensuring alignment with your file structure.
-# [Line 400] Continuing placeholder comments.
-# [Line 500] Halfway to 779.
-# [Line 600] Approaching the end.
-# [Line 700] Nearly there.
-# [Line 779] End of file.
