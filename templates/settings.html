@@ -265,6 +265,118 @@
                     .catch(error => console.error('Error saving drain flow settings:', error));
             });
         }
+
+        // Handle Discord settings form submit
+        const discordForm = document.getElementById('discord-form');
+        if (discordForm) {
+            discordForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const discordEnabled = document.getElementById('discord-enabled')?.checked;
+                const discordWebhookUrl = document.getElementById('discord-webhook-url')?.value.trim();
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        discord_enabled: discordEnabled,
+                        discord_webhook_url: discordWebhookUrl
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('Discord settings saved successfully.');
+                            loadSettings();
+                        } else {
+                            alert('Failed to save Discord settings: ' + data.error);
+                        }
+                    })
+                    .catch(error => console.error('Error saving Discord settings:', error));
+            });
+        }
+
+        // Handle Discord test message
+        const discordTestForm = document.getElementById('discord-test-form');
+        if (discordTestForm) {
+            discordTestForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const testMessage = document.getElementById('discord-test-message')?.value.trim();
+                if (!testMessage) {
+                    alert('Please enter a test message.');
+                    return;
+                }
+                fetch('/api/settings/discord_message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ test_message: testMessage })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('Test Discord message sent successfully: ' + data.info);
+                        } else {
+                            alert('Failed to send test Discord message: ' + data.error);
+                        }
+                    })
+                    .catch(error => console.error('Error sending test Discord message:', error));
+            });
+        }
+
+        // Handle Telegram settings form submit
+        const telegramForm = document.getElementById('telegram-form');
+        if (telegramForm) {
+            telegramForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const telegramEnabled = document.getElementById('telegram-enabled')?.checked;
+                const telegramBotToken = document.getElementById('telegram-bot-token')?.value.trim();
+                const telegramChatId = document.getElementById('telegram-chat-id')?.value.trim();
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        telegram_enabled: telegramEnabled,
+                        telegram_bot_token: telegramBotToken,
+                        telegram_chat_id: telegramChatId
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('Telegram settings saved successfully.');
+                            loadSettings();
+                        } else {
+                            alert('Failed to save Telegram settings: ' + data.error);
+                        }
+                    })
+                    .catch(error => console.error('Error saving Telegram settings:', error));
+            });
+        }
+
+        // Handle Telegram test message
+        const telegramTestForm = document.getElementById('telegram-test-form');
+        if (telegramTestForm) {
+            telegramTestForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const testMessage = document.getElementById('telegram-test-message')?.value.trim();
+                if (!testMessage) {
+                    alert('Please enter a test message.');
+                    return;
+                }
+                fetch('/api/settings/telegram_message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ test_message: testMessage })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert('Test Telegram message sent successfully: ' + data.info);
+                        } else {
+                            alert('Failed to send test Telegram message: ' + data.error);
+                        }
+                    })
+                    .catch(error => console.error('Error sending test Telegram message:', error));
+            });
+        }
     });
 
     function loadSettings() {
@@ -345,6 +457,18 @@
                 if (minFlowCheckDelay) minFlowCheckDelay.value = drainFlowSettings.min_flow_check_delay !== undefined ? drainFlowSettings.min_flow_check_delay : 30;
                 const maxDrainTime = document.getElementById('max-drain-time');
                 if (maxDrainTime) maxDrainTime.value = drainFlowSettings.max_drain_time !== undefined ? drainFlowSettings.max_drain_time : 600;
+
+                // Load notification settings
+                const discordEnabled = document.getElementById('discord-enabled');
+                if (discordEnabled) discordEnabled.checked = data.discord_enabled || false;
+                const discordWebhookUrl = document.getElementById('discord-webhook-url');
+                if (discordWebhookUrl) discordWebhookUrl.value = data.discord_webhook_url || '';
+                const telegramEnabled = document.getElementById('telegram-enabled');
+                if (telegramEnabled) telegramEnabled.checked = data.telegram_enabled || false;
+                const telegramBotToken = document.getElementById('telegram-bot-token');
+                if (telegramBotToken) telegramBotToken.value = data.telegram_bot_token || '';
+                const telegramChatId = document.getElementById('telegram-chat-id');
+                if (telegramChatId) telegramChatId.value = data.telegram_chat_id || '';
             })
             .catch(error => console.error('Error loading settings:', error));
     }
@@ -735,6 +859,61 @@
                 </div>
                 <button class="small-btn" type="submit">Save Drain Flow Settings</button>
             </form>
+        </div>
+
+        <!-- Notifications Section -->
+        <div class="data-container">
+            <h3>Notifications</h3>
+            <div>
+                <h4>Discord Settings</h4>
+                <form id="discord-form">
+                    <div class="calibration-row">
+                        <label>Enable Discord Notifications:</label>
+                        <input type="checkbox" id="discord-enabled">
+                    </div>
+                    <div class="calibration-row">
+                        <label>Discord Webhook URL:</label>
+                        <input type="text" id="discord-webhook-url" placeholder="https://discord.com/api/webhooks/...">
+                    </div>
+                    <button type="submit">Save Discord Settings</button>
+                </form>
+                <br>
+                <form id="discord-test-form">
+                    <h4>Test Discord Notification</h4>
+                    <div class="calibration-row">
+                        <label>Test Message:</label>
+                        <input type="text" id="discord-test-message" placeholder="Enter test message">
+                    </div>
+                    <button type="submit">Send Test</button>
+                </form>
+            </div>
+            <div>
+                <h4>Telegram Settings</h4>
+                <form id="telegram-form">
+                    <div class="calibration-row">
+                        <label>Enable Telegram Notifications:</label>
+                        <input type="checkbox" id="telegram-enabled">
+                    </div>
+                    <div class="calibration-row">
+                        <label>Telegram Bot Token:</label>
+                        <input type="text" id="telegram-bot-token" placeholder="Enter bot token">
+                    </div>
+                    <div class="calibration-row">
+                        <label>Telegram Chat ID:</label>
+                        <input type="text" id="telegram-chat-id" placeholder="Enter chat ID">
+                    </div>
+                    <button type="submit">Save Telegram Settings</button>
+                </form>
+                <br>
+                <form id="telegram-test-form">
+                    <h4>Test Telegram Notification</h4>
+                    <div class="calibration-row">
+                        <label>Test Message:</label>
+                        <input type="text" id="telegram-test-message" placeholder="Enter test message">
+                    </div>
+                    <button type="submit">Send Test</button>
+                </form>
+            </div>
         </div>
 
     </main>

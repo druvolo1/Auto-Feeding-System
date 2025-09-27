@@ -31,6 +31,9 @@
 
                     const localWebsocketCheckbox = document.getElementById('local-websocket-debug');
                     if (localWebsocketCheckbox) localWebsocketCheckbox.checked = data['local-websocket'] || false;
+
+                    const notificationsCheckbox = document.getElementById('notifications-debug');
+                    if (notificationsCheckbox) notificationsCheckbox.checked = data['notifications'] || false;
                 })
                 .catch(error => console.error('Error loading debug states:', error));
         });
@@ -108,6 +111,11 @@
             <div class="checkbox-container">
                 <label>Local WebSocket</label>
                 <input type="checkbox" id="local-websocket-debug" onchange="toggleDebug('local-websocket')">
+            </div>
+
+            <div class="checkbox-container">
+                <label>Notifications</label>
+                <input type="checkbox" id="notifications-debug" onchange="toggleDebug('notifications')">
             </div>
         </div>
     </main>

@@ -4,6 +4,7 @@ import api.feed_flow
 import api.drain_flow
 from services.valve_relay_service import reinitialize_relay_service
 from utils.settings_utils import load_settings, save_settings
+import requests  # For sending Discord and Telegram test POSTs
 
 settings_blueprint = Blueprint('settings', __name__)
 
@@ -12,6 +13,12 @@ def get_settings():
     settings = load_settings()
     # Ensure debug_states exists and includes dns-resolution
     settings.setdefault('debug_states', {}).setdefault('dns-resolution', False)
+    # Ensure notification settings exist
+    settings.setdefault('discord_enabled', False)
+    settings.setdefault('discord_webhook_url', '')
+    settings.setdefault('telegram_enabled', False)
+    settings.setdefault('telegram_bot_token', '')
+    settings.setdefault('telegram_chat_id', '')
     return jsonify(settings)
 
 @settings_blueprint.route('', methods=['POST'])
@@ -79,6 +86,18 @@ def update_settings():
         else:
             return jsonify({"status": "failure", "error": "Invalid drain flow settings"}), 400
 
+    # Handle notification settings
+    if 'discord_enabled' in data:
+        settings['discord_enabled'] = data['discord_enabled']
+    if 'discord_webhook_url' in data:
+        settings['discord_webhook_url'] = data['discord_webhook_url']
+    if 'telegram_enabled' in data:
+        settings['telegram_enabled'] = data['telegram_enabled']
+    if 'telegram_bot_token' in data:
+        settings['telegram_bot_token'] = data['telegram_bot_token']
+    if 'telegram_chat_id' in data:
+        settings['telegram_chat_id'] = data['telegram_chat_id']
+
     save_settings(settings)
     
     if plants_changed:
@@ -134,6 +153,85 @@ def assign_usb_device():
     reinitialize_relay_service()
 
     return jsonify({"status": "success", "usb_roles": settings["usb_roles"]})
+
+@settings_blueprint.route('/discord_message', methods=['POST'])
+def discord_webhook():
+    """
+    POST JSON like:
+    {
+      "test_message": "Hello from Flow Meter Monitor!"
+    }
+    Retrieves settings.discord_webhook_url and settings.discord_enabled,
+    then attempts to POST to Discord.
+    """
+    data = request.get_json() or {}
+    test_message = data.get("test_message", "").strip()
+    if not test_message:
+        return jsonify({"status": "failure", "error": "No test_message provided"}), 400
+
+    settings = load_settings()
+    if not settings.get("discord_enabled", False):
+        return jsonify({"status": "failure", "error": "Discord notifications are disabled"}), 400
+
+    webhook_url = settings.get("discord_webhook_url", "").strip()
+    if not webhook_url:
+        return jsonify({"status": "failure", "error": "No Discord webhook URL is configured"}), 400
+
+    try:
+        resp = requests.post(webhook_url, json={"content": test_message}, timeout=10)
+        if 200 <= resp.status_code < 300:
+            return jsonify({"status": "success", "info": f"Message delivered (HTTP {resp.status_code})."})
+        else:
+            return jsonify({
+                "status": "failure",
+                "error": f"Discord webhook returned {resp.status_code} {resp.text}"
+            }), 400
+    except Exception as ex:
+        return jsonify({"status": "failure", "error": f"Exception sending webhook: {ex}"}), 400
+
+@settings_blueprint.route('/telegram_message', methods=['POST'])
+def telegram_webhook():
+    """
+    POST JSON like:
+    {
+      "test_message": "Hello from Flow Meter Monitor!"
+    }
+    Retrieves settings.telegram_bot_token and settings.telegram_enabled,
+    then attempts to POST to Telegram's Bot API.
+    """
+    data = request.get_json() or {}
+    test_message = data.get("test_message", "").strip()
+    if not test_message:
+        return jsonify({"status": "failure", "error": "No test_message provided"}), 400
+
+    settings = load_settings()
+    if not settings.get("telegram_enabled", False):
+        return jsonify({"status": "failure", "error": "Telegram notifications are disabled"}), 400
+
+    bot_token = settings.get("telegram_bot_token", "").strip()
+    if not bot_token:
+        return jsonify({"status": "failure", "error": "No Telegram bot token is configured"}), 400
+
+    chat_id = settings.get("telegram_chat_id", "").strip()
+    if not chat_id:
+        return jsonify({"status": "failure", "error": "No Telegram chat_id is configured"}), 400
+
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": test_message
+        }
+        resp = requests.post(url, json=payload, timeout=10)
+        if 200 <= resp.status_code < 300:
+            return jsonify({"status": "success", "info": f"Message delivered (HTTP {resp.status_code})."})
+        else:
+            return jsonify({
+                "status": "failure",
+                "error": f"Telegram API returned {resp.status_code} {resp.text}"
+            }), 400
+    except Exception as ex:
+        return jsonify({"status": "failure", "error": f"Exception sending Telegram message: {ex}"}), 400
 
 @settings_blueprint.route('/settings')
 def settings_page():
