@@ -61,6 +61,7 @@ app.config['plant_lock'] = Lock()
 app.config['plant_clients'] = {}
 app.config['reload_event'] = Event()
 app.config['debug_states'] = debug_states
+app.config['feeding_sequence_active'] = False
 
 socketio = SocketIO(async_mode="eventlet", cors_allowed_origins="*")
 socketio.init_app(app)
