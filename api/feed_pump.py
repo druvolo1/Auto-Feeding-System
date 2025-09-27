@@ -15,7 +15,7 @@ def turn_on_feed_pump():
     settings = load_settings()
     feed_pump = settings.get('feed_pump', {})
     io_number = feed_pump.get('io_number')
-    pump_type = feed_pump.get('type', 'io')  # Default to 'io' if not set
+    pump_type = feed_pump.get('type', 'io')
 
     if pump_type == 'io' and not io_number:
         log_feeding_feedback("Feed pump IO number not configured", status='error')
@@ -28,7 +28,7 @@ def turn_on_feed_pump():
 
     try:
         logger.debug(f"Calling control_feed_pump with io_number={io_number}, pump_type={pump_type}, state=1 for request {request_id}")
-        success = control_feed_pump(io_number=io_number, pump_type=pump_type, state=1)  # 1 for ON
+        success = control_feed_pump(io_number=io_number, pump_type=pump_type, state=1)
         if success:
             logger.debug(f"Successfully turned on feed pump for request {request_id}")
             return jsonify({"status": "success"})
@@ -48,7 +48,7 @@ def turn_off_feed_pump():
     settings = load_settings()
     feed_pump = settings.get('feed_pump', {})
     io_number = feed_pump.get('io_number')
-    pump_type = feed_pump.get('type', 'io')  # Default to 'io' if not set
+    pump_type = feed_pump.get('type', 'io')
 
     if pump_type == 'io' and not io_number:
         log_feeding_feedback("Feed pump IO number not configured", status='error')
@@ -61,7 +61,7 @@ def turn_off_feed_pump():
 
     try:
         logger.debug(f"Calling control_feed_pump with io_number={io_number}, pump_type={pump_type}, state=0 for request {request_id}")
-        success = control_feed_pump(io_number=io_number, pump_type=pump_type, state=0)  # 0 for OFF
+        success = control_feed_pump(io_number=io_number, pump_type=pump_type, state=0)
         if success:
             logger.debug(f"Successfully turned off feed pump for request {request_id}")
             return jsonify({"status": "success"})
@@ -81,7 +81,7 @@ def get_feed_pump_status():
     settings = load_settings()
     feed_pump = settings.get('feed_pump', {})
     io_number = feed_pump.get('io_number')
-    pump_type = feed_pump.get('type', 'io')  # Default to 'io' if not set
+    pump_type = feed_pump.get('type', 'io')
 
     if pump_type == 'io' and not io_number:
         log_feeding_feedback("Feed pump IO number not configured", status='error')
@@ -96,7 +96,7 @@ def get_feed_pump_status():
         logger.debug(f"Calling control_feed_pump with io_number={io_number}, pump_type={pump_type}, get_status=True for request {request_id}")
         status = control_feed_pump(io_number=io_number, pump_type=pump_type, get_status=True)
         logger.debug(f"Got feed pump status {status} for request {request_id}")
-        return jsonify({"status": "success", "state": status})
+        return jsonify({"status": "success", "state": "on" if status else "off"})
     except Exception as e:
         logger.error(f"Error in get_feed_pump_status for request {request_id}: {str(e)}")
         log_feeding_feedback(f"Error getting feed pump status: {str(e)}", status='error')
