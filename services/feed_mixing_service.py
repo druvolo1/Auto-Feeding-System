@@ -60,7 +60,7 @@ def monitor_feed_mixing(socketio, app):
         with app.app_context():  # Create application context
             phase = app.config.get('current_feeding_phase', 'idle')
             plant_ip = app.config.get('current_plant_ip')
-            log_feeding_feedback(f"Checking phase for {plant_ip}: {phase}, mixed: {mixed}, components_off: {components_off}", plant_ip, 'debug', socketio)
+            #log_feeding_feedback(f"Checking phase for {plant_ip}: {phase}, mixed: {mixed}, components_off: {components_off}", plant_ip, 'debug', socketio)
 
             if phase == 'fill' and plant_ip and not mixed:
                 components_off = False  # Reset when starting new fill phase
