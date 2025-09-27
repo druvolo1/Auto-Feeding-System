@@ -144,7 +144,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
     global drain_complete
     with _app.app_context():  # Use the globally set _app instance
         activation_flow_rate = settings.get('activation_flow_rate', 0.2)  # Default to 0.2 Gal/min
-        minimum_flow_rate = settings.get('minimum_flow_rate', 0.05)  # Use setting for minimum flow
+        min_flow_rate = settings.get('min_flow_rate', 0.05)  # Default to 0.05 Gal/min
         activation_delay = settings.get('activation_delay', 5)  # Default to 5 seconds
         min_flow_check_delay = settings.get('min_flow_check_delay', 30)  # Default to 30 seconds
         max_drain_time = settings.get('max_drain_time', 600)  # Default to 600 seconds
@@ -161,8 +161,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                 return
 
         start_time = time.time()
-        flow_activated = False
-        activation_start = None
+        monitoring_started = False
         low_flow_start = None
 
         while time.time() - start_time < max_drain_time:
@@ -186,34 +185,29 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             elapsed_time = time.time() - start_time
             log_feeding_feedback(f"Drain flow for {plant_ip}: {flow_rate:.2f} Gal/min (elapsed: {elapsed_time:.1f}s)", plant_ip, status='info', sio=sio)
 
-            # Activation logic
-            if not flow_activated:
-                if flow_rate >= activation_flow_rate:
-                    if activation_start is None:
-                        activation_start = time.time()
-                    if time.time() - activation_start >= activation_delay:
-                        flow_activated = True
-                        log_feeding_feedback(f"Drain flow activated for {plant_ip} after continuous flow above {activation_flow_rate} Gal/min for {activation_delay}s", plant_ip, status='info', sio=sio)
-                else:
-                    activation_start = None
-            else:
-                # Low flow detection after activation
-                if flow_rate >= minimum_flow_rate:
+            # Start monitoring after activation_delay from drain start
+            if not monitoring_started and elapsed_time >= activation_delay:
+                monitoring_started = True
+                log_feeding_feedback(f"Starting flow monitoring for {plant_ip} after activation delay of {activation_delay}s", plant_ip, status='info', sio=sio)
+
+            # Low flow detection after monitoring starts
+            if monitoring_started:
+                if flow_rate >= min_flow_rate:
                     low_flow_start = None
                 else:
                     if low_flow_start is None:
                         low_flow_start = time.time()
                     if time.time() - low_flow_start >= min_flow_check_delay:
-                        log_feeding_feedback(f"Drain flow dropped below {minimum_flow_rate} Gal/min for {min_flow_check_delay}s, considering bucket empty and proceeding to fill", plant_ip, status='warning', sio=sio)
+                        log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, status='warning', sio=sio)
                         control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
                         drain_complete = {'status': True, 'reason': 'low_flow'}
                         return
 
             eventlet.sleep(1)  # Non-blocking sleep
 
-        log_feeding_feedback(f"Max drain time ({max_drain_time}s) exceeded for {plant_ip}, aborting drain", plant_ip, status='warning', sio=sio)
+        log_feeding_feedback(f"Max drain time ({max_drain_time}s) exceeded for {plant_ip}, aborting drain and proceeding to fill as failsafe", plant_ip, status='warning', sio=sio)
         control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
-        drain_complete = {'status': False, 'reason': 'timeout'}
+        drain_complete = {'status': True, 'reason': 'timeout'}  # Changed to true to proceed to fill
 
 def start_feeding_sequence():
     """Start the feeding sequence for all eligible plants sequentially."""
@@ -340,7 +334,7 @@ def start_feeding_sequence():
                     response.raise_for_status()
                     log_feeding_feedback(f"Reset feeding_in_progress for plant {plant_ip} due to interruption", plant_ip, status='info', sio=socketio_instance)
                 except Exception as e:
-                    log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
+                    log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=sio)
                 flow_monitor.kill()
                 break
             eventlet.sleep(1)
