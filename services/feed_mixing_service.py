@@ -2,11 +2,11 @@ import eventlet
 import time
 from flask import current_app
 from datetime import datetime
-from services.valve_relay_service import control_relay
+from services.valve_relay_service import turn_on_relay, turn_off_relay
 from services.feed_pump_service import turn_on_feed_pump, turn_off_feed_pump
 from utils.settings_utils import load_settings
 from .log_service import log_event
-from .feeding_service import feeding_sequence_active  # Import to monitor feeding status
+from .feeding_service import feeding_sequence_active
 from services.feed_flow_service import get_total_volume as get_feed_total_volume
 from services.fresh_flow_service import get_total_volume as get_fresh_total_volume
 
@@ -36,7 +36,10 @@ def control_local_valve(relay_port, action, valve_type, sio=None):
     Control a local valve (feed_water or fresh_water) using the relay service.
     """
     try:
-        control_relay(relay_port, action == 'on')
+        if action == 'on':
+            turn_on_relay(relay_port)
+        else:
+            turn_off_relay(relay_port)
         log_mixing_feedback(f"{valve_type} valve (port {relay_port}) turned {action}", status='success', sio=sio)
         return True
     except Exception as e:
