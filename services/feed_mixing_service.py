@@ -1,5 +1,6 @@
 import eventlet
 import time
+import requests
 from flask import Flask, current_app
 from datetime import datetime
 from services.valve_relay_service import turn_on_relay, turn_off_relay
@@ -59,11 +60,25 @@ def control_feed_pump(action, sio=None, app=None):
     """
     settings = load_settings()
     feed_pump = settings.get('feed_pump', {})
-    pump_type = feed_pump.get('type')
+    pump_type = feed_pump.get('type', 'io')
     io_number = feed_pump.get('io_number')
-    log_mixing_feedback(f"Attempting to control feed pump: action={action}, pump_type={pump_type}, io_number={io_number}", status='debug', sio=sio, app=app)
+    ip_address = feed_pump.get('ip_address')
+    log_mixing_feedback(f"Attempting to control feed pump: action={action}, pump_type={pump_type}, io_number={io_number}, ip_address={ip_address}", status='debug', sio=sio, app=app)
+    
     try:
-        if pump_type == 'io' and io_number:
+        if pump_type == 'shelly' and ip_address:
+            # Use API endpoint for Shelly control
+            endpoint = f"http://{ip_address}/feed_pump/{action}"
+            response = requests.post(endpoint, timeout=5)
+            if response.status_code == 200 and response.json().get('status') == 'success':
+                log_mixing_feedback(f"Feed pump (Shelly {ip_address}) turned {action}", status='success', sio=sio, app=app)
+                return True
+            else:
+                log_mixing_feedback(f"Failed to turn {action} feed pump (Shelly {ip_address}): {response.text}", status='error', sio=sio, app=app)
+                from app import send_notification
+                send_notification(f"Failed to turn {action} feed pump (Shelly {ip_address}): {response.text}")
+                return False
+        elif pump_type == 'io' and io_number:
             state = 1 if action == 'on' else 0
             success = pump_control(io_number=io_number, pump_type=pump_type, state=state, sio=sio, app=app)
             if success:
@@ -75,16 +90,15 @@ def control_feed_pump(action, sio=None, app=None):
                 send_notification(f"Failed to turn {action} feed pump (IO {io_number}): Control function returned False")
                 return False
         else:
-            log_mixing_feedback(f"Invalid feed pump configuration: type={pump_type}, io_number={io_number}", status='error', sio=sio, app=app)
+            log_mixing_feedback(f"Invalid feed pump configuration: type={pump_type}, io_number={io_number}, ip_address={ip_address}", status='error', sio=sio, app=app)
             from app import send_notification
-            send_notification(f"Invalid feed pump configuration: type={pump_type}, io_number={io_number}")
+            send_notification(f"Invalid feed pump configuration: type={pump_type}, io_number={io_number}, ip_address={ip_address}")
             return False
     except Exception as e:
-        # Handle RPi.GPIO errors gracefully, especially for bench testing
-        log_mixing_feedback(f"Failed to turn {action} feed pump (IO {io_number}): {str(e)}", status='error', sio=sio, app=app)
+        log_mixing_feedback(f"Failed to turn {action} feed pump: {str(e)}", status='error', sio=sio, app=app)
         from app import send_notification
-        send_notification(f"Failed to turn {action} feed pump (IO {io_number}): {str(e)}")
-        return False  # Return False to indicate failure but continue execution
+        send_notification(f"Failed to turn {action} feed pump: {str(e)}")
+        return False
 
 def wait_for_full_sensor(plant_ip, expected_triggered, timeout=600, sio=None, app=None):
     """
