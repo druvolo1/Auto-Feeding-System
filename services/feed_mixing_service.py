@@ -87,11 +87,19 @@ def monitor_feed_mixing(sio=None):
     """
     global stop_mixing_flag
     while True:
-        if feeding_sequence_active:
-            if stop_mixing_flag:
-                stop_mixing_flag = False
-                continue
+        if not feeding_sequence_active:
+            if debug_states.get('feeding', False):
+                log_mixing_feedback(f"Feeding sequence not active, waiting", status='info', sio=sio)
+            eventlet.sleep(1)
+            continue
 
+        if stop_mixing_flag:
+            log_mixing_feedback(f"Stop mixing flag set, resetting", status='info', sio=sio)
+            stop_mixing_flag = False
+            eventlet.sleep(1)
+            continue
+
+        try:
             settings = load_settings()
             nutrient_concentration = settings.get('nutrient_concentration', 1)
             relay_ports = settings.get('relay_ports', {})
@@ -105,14 +113,19 @@ def monitor_feed_mixing(sio=None):
                 eventlet.sleep(1)
                 continue
 
-            # Get current plant data (assuming single plant for simplicity; adjust for multiple)
+            # Get current plant data
             with current_app.config['plant_lock']:
                 plant_data = current_app.config['plant_data']
-                # Example: Get first plant's data; adjust for multiple plants
                 if not plant_data:
+                    log_mixing_feedback(f"No plant data available during active feeding, waiting", status='error', sio=sio)
                     eventlet.sleep(1)
                     continue
-                plant_ip = list(plant_data.keys())[0]  # Adjust to handle multiple
+                try:
+                    plant_ip = list(plant_data.keys())[0]  # Adjust for multiple plants
+                except IndexError:
+                    log_mixing_feedback(f"No plants in plant_data during active feeding, waiting", status='error', sio=sio)
+                    eventlet.sleep(1)
+                    continue
                 system_volume = plant_data[plant_ip]['settings'].get('system_volume', 5.5)
                 system_name = plant_data[plant_ip].get('system_name', plant_ip)
                 water_level = plant_data[plant_ip].get('water_level', {})
@@ -136,6 +149,7 @@ def monitor_feed_mixing(sio=None):
             feed_valve_on = False
             fresh_valve_on = False
             pump_on = False
+            counter = 0
 
             # Start mixing: Turn on valves and pump based on concentration
             if nutrient_concentration > 0:
@@ -143,14 +157,31 @@ def monitor_feed_mixing(sio=None):
                     feed_valve_on = True
                     if control_feed_pump('on', sio=sio):
                         pump_on = True
+                else:
+                    log_mixing_feedback(f"Failed to start feed valve for {system_name}", status='error', sio=sio)
+                    eventlet.sleep(1)
+                    continue
             if control_local_valve(fresh_valve_port, 'on', 'Fresh', sio=sio):
                 fresh_valve_on = True
+            else:
+                log_mixing_feedback(f"Failed to start fresh valve for {system_name}", status='error', sio=sio)
+                if feed_valve_on:
+                    control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio)
+                if pump_on:
+                    control_feed_pump('off', sio=sio)
+                eventlet.sleep(1)
+                continue
 
             while feeding_sequence_active and not stop_mixing_flag:
                 # Update volumes
                 nutrient_volume = get_feed_total_volume() or 0
                 fresh_volume = get_fresh_total_volume() or 0
                 total_volume = nutrient_volume + fresh_volume
+
+                # Check volume limit with buffer to prevent overshoot
+                if total_volume >= system_volume - 0.01:
+                    log_mixing_feedback(f"Total volume reached for {system_name} ({total_volume:.2f} Gal), stopping mixing", status='info', sio=sio)
+                    break
 
                 # Check remote full sensor
                 with current_app.config['plant_lock']:
@@ -161,9 +192,14 @@ def monitor_feed_mixing(sio=None):
                     log_mixing_feedback(f"Full sensor triggered for {system_name}, stopping mixing", status='success', sio=sio)
                     break
 
-                if total_volume >= system_volume:
-                    log_mixing_feedback(f"Total volume reached for {system_name} ({total_volume:.2f} Gal), stopping mixing", status='info', sio=sio)
-                    break
+                # Debug logging for flow rates
+                if counter % 5 == 0:
+                    if debug_states.get('feed-flow', False):
+                        feed_flow_rate = get_latest_feed_flow_rate() or 0
+                        log_mixing_feedback(f"Feed flow for {system_name}: {feed_flow_rate:.2f} Gal/min, total: {nutrient_volume:.2f} Gal", status='info', sio=sio)
+                    if debug_states.get('fresh-flow', False):
+                        fresh_flow_rate = get_latest_fresh_flow_rate() or 0
+                        log_mixing_feedback(f"Fresh flow for {system_name}: {fresh_flow_rate:.2f} Gal/min, total: {fresh_volume:.2f} Gal", status='info', sio=sio)
 
                 # Adjust for ratio if nutrient_concentration > 0
                 if nutrient_concentration > 0:
@@ -174,8 +210,8 @@ def monitor_feed_mixing(sio=None):
                         fresh_valve_on = False
                     elif current_ratio > nutrient_concentration and not fresh_valve_on:
                         log_mixing_feedback(f"Resuming fresh valve for {system_name} (current ratio {current_ratio:.2f} > {nutrient_concentration})", status='info', sio=sio)
-                        control_local_valve(fresh_valve_port, 'on', 'Fresh', sio=sio)
-                        fresh_valve_on = True
+                        if control_local_valve(fresh_valve_port, 'on', 'Fresh', sio=sio):
+                            fresh_valve_on = True
 
                     if nutrient_volume >= target_nutrient and feed_valve_on:
                         log_mixing_feedback(f"Nutrient target reached for {system_name} ({nutrient_volume:.2f} Gal), stopping feed valve and pump", status='info', sio=sio)
@@ -189,16 +225,15 @@ def monitor_feed_mixing(sio=None):
                     control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio)
                     fresh_valve_on = False
 
+                counter += 1
                 eventlet.sleep(1)
 
-            # Cleanup
-            if feed_valve_on:
-                control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio)
-            if pump_on:
-                control_feed_pump('off', sio=sio)
-            if fresh_valve_on:
-                control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio)
+        # Cleanup
+        if feed_valve_on:
+            control_local_valve(feed_valve_port, 'off', 'Feed', sio=sio)
+        if pump_on:
+            control_feed_pump('off', sio=sio)
+        if fresh_valve_on:
+            control_local_valve(fresh_valve_port, 'off', 'Fresh', sio=sio)
 
-            log_mixing_feedback(f"Mixing completed or stopped for {system_name}", status='success', sio=sio)
-        else:
-            eventlet.sleep(1)  # Wait if not feeding
+        log_mixing_feedback(f"Mixing completed or stopped for {system_name}", status='success', sio=sio)
