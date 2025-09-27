@@ -807,25 +807,22 @@
 
         <!-- Nutrient Feed Pump Section -->
         <div class="data-container">
-            <h3>Nutrient Feed Pump</h3>
+            <h3>Nutrient Feed Pump</h2>
             <form id="feed-pump-form">
-                <div class="calibration-row">
-                    <label>IP Address:</label>
-                    <input type="text" id="feed-pump-ip" placeholder="e.g., 192.168.1.100">
-                </div>
-                <div class="calibration-row feed-pump-options">
-                    <input type="checkbox" id="feed-pump-io" name="feed-pump-type" value="io">
-                    <label for="feed-pump-io">IO</label>
-                    <input type="text" id="feed-pump-io-number" placeholder="e.g., 17" style="margin-left: 5px; width: 60px;">
-                    <input type="checkbox" id="feed-pump-shelly" name="feed-pump-type" value="shelly" disabled>
-                    <label for="feed-pump-shelly">Shelly</label>
-                    (Shelly support coming soon)
-                </div>
+                <label>IO Number (for IO mode):</label>
+                <input type="text" id="feed-pump-io-number" placeholder="e.g., 25">
+                <label>IP Address (for Shelly mode):</label>
+                <input type="text" id="feed-pump-ip" placeholder="e.g., 172.16.1.93">
+                <label>
+                    <input type="radio" name="feed_pump_type" value="io" checked> IO
+                </label>
+                <label>
+                    <input type="radio" name="feed_pump_type" value="shelly"> Shelly
+                </label>
                 <button type="submit">Save Feed Pump Settings</button>
             </form>
-            <br>
-            <button id="feed-pump-on" class="small-btn relay-button" onclick="turnOnFeedPump()">On</button>
-            <button id="feed-pump-off" class="small-btn relay-button" onclick="turnOffFeedPump()">Off</button>
+            <button onclick="fetch('/api/feed_pump/on', {method: 'POST'})">On</button>
+            <button onclick="fetch('/api/feed_pump/off', {method: 'POST'})">Off</button>
         </div>
 
         <!-- Drain Flow Settings -->
