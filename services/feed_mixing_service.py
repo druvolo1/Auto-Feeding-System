@@ -70,20 +70,21 @@ def control_feed_pump(action, sio=None, app=None):
                 log_mixing_feedback(f"Feed pump (IO {io_number}) turned {action}", status='success', sio=sio, app=app)
                 return True
             else:
-                log_mixing_feedback(f"Failed to turn {action} feed pump (IO {io_number})", status='error', sio=sio, app=app)
+                log_mixing_feedback(f"Failed to turn {action} feed pump (IO {io_number}): Control function returned False", status='error', sio=sio, app=app)
                 from app import send_notification
-                send_notification(f"Failed to turn {action} feed pump (IO {io_number})")
+                send_notification(f"Failed to turn {action} feed pump (IO {io_number}): Control function returned False")
                 return False
         else:
-            log_mixing_feedback(f"Invalid feed pump configuration", status='error', sio=sio, app=app)
+            log_mixing_feedback(f"Invalid feed pump configuration: type={pump_type}, io_number={io_number}", status='error', sio=sio, app=app)
             from app import send_notification
-            send_notification(f"Invalid feed pump configuration")
+            send_notification(f"Invalid feed pump configuration: type={pump_type}, io_number={io_number}")
             return False
     except Exception as e:
-        log_mixing_feedback(f"Failed to turn {action} feed pump: {str(e)}", status='error', sio=sio, app=app)
+        # Handle RPi.GPIO errors gracefully, especially for bench testing
+        log_mixing_feedback(f"Failed to turn {action} feed pump (IO {io_number}): {str(e)}", status='error', sio=sio, app=app)
         from app import send_notification
-        send_notification(f"Failed to turn {action} feed pump: {str(e)}")
-        return False
+        send_notification(f"Failed to turn {action} feed pump (IO {io_number}): {str(e)}")
+        return False  # Return False to indicate failure but continue execution
 
 def wait_for_full_sensor(plant_ip, expected_triggered, timeout=600, sio=None, app=None):
     """
