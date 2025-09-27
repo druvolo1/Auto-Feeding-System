@@ -10,6 +10,7 @@ from services.feed_flow_service import get_total_volume as get_feed_total_volume
 from services.drain_flow_service import get_total_volume as get_drain_total_volume, reset_total as reset_drain_total
 from utils.settings_utils import load_settings
 from flask_socketio import SocketIO  # Import SocketIO explicitly
+from app import app  # Import the Flask app instance from app.py
 
 # Global flag to track if feeding should be stopped
 stop_feeding_flag = False
@@ -311,6 +312,11 @@ def start_feeding_sequence():
         if not flow_result['success']:
             log_feeding_feedback(f"Drain flow issue for {plant_ip}: {flow_result['reason']}, proceeding to fill", plant_ip, status='warning', sio=socketio_instance)
             control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=socketio_instance)  # Stop drain if flow issue
+
+        # Always proceed to fill if sensor triggered, prioritizing sensor
+        if sensor_result:
+            # Proceed to fill even if flow issue
+            pass
         elif not sensor_result:
             if stop_feeding_flag:
                 control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=socketio_instance)
