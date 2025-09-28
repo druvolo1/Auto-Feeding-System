@@ -77,8 +77,9 @@ def monitor_feed_mixing(socketio, app):
 
             phase = app.config.get('current_feeding_phase', 'idle')
             plant_ip = app.config.get('current_plant_ip')
+            use_feed = app.config.get('use_feed', True)
 
-            if phase == 'fill' and plant_ip and not mixed:
+            if phase == 'fill' and plant_ip and not mixed and use_feed:
                 # Get system_volume from plant data
                 with app.config['plant_lock']:
                     system_volume = app.config['plant_data'].get(plant_ip, {}).get('settings', {}).get('system_volume', 0)
@@ -129,7 +130,7 @@ def monitor_feed_mixing(socketio, app):
                         if fresh_relay:
                             control_local_relay(fresh_relay, 'off', socketio, plant_ip)
                         if stop_feeding_flag:
-                            log_feeding_feedback(f"Feed mixing interrupted by user for {plant_ip}, turned off pump and relays", plant_ip, 'error', socketio)
+                            log_feeding_feedback(f"Feed mixing interrupted for {plant_ip}, turned off pump and relays", plant_ip, 'error', socketio)
                         else:
                             log_feeding_feedback(f"Fill phase completed for {plant_ip}, turned off feed pump and relays", plant_ip, 'info', socketio)
                         components_off = True
