@@ -144,10 +144,9 @@ def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retri
                     log_feeding_feedback(f"Sensor {sensor_label} reached expected state (triggered={expected_triggered}) after change from {initial_triggered} for plant {plant_ip}", plant_ip, status='success', sio=sio)
                     return True
             time.sleep(1)
-        if not state_changed:
-            log_feeding_feedback(f"Timeout waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} (attempt {attempt+1}/{retries})", plant_ip, status='warning', sio=sio)
-            if attempt == retries - 1:
-                send_notification(f"Failed waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} after {retries} attempts")
+        log_feeding_feedback(f"Timeout waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} (attempt {attempt+1}/{retries})", plant_ip, status='warning', sio=sio)
+        if attempt == retries - 1:
+            send_notification(f"Failed waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} after {retries} attempts")
         if attempt < retries - 1:
             time.sleep(5)
     log_feeding_feedback(f"Failed waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} after {retries} attempts", plant_ip, status='error', sio=sio)
@@ -412,13 +411,6 @@ def start_feeding_sequence():
             log_feeding_feedback(f"Feed reservoir is empty before filling plant {plant_ip}. Stopping feeding sequence.", plant_ip, status='error', sio=socketio_instance)
             send_notification(f"Feed reservoir ran out before feeding plant {plant_ip}. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
             message.append(f"Stopped {plant_ip}: Feed reservoir empty")
-            try:
-                response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
-                response.raise_for_status()
-                log_feeding_feedback(f"Reset feeding_in_progress for plant {plant_ip} due to empty feed reservoir", plant_ip, status='info', sio=socketio_instance)
-            except Exception as e:
-                log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
-                send_notification(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}")
             stop_feeding_sequence()
             break
 
@@ -521,6 +513,8 @@ def start_feeding_sequence():
     if not stop_feeding_flag:
         log_feeding_feedback(f"Completed full feeding cycle for all plants.", status='info', sio=socketio_instance)
         send_notification(f"Completed full feeding cycle for all plants: {'; '.join(message) if message else 'All plants processed successfully'}. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
+    else:
+        log_feeding_feedback(f"Feeding sequence terminated early.", status='info', sio=socketio_instance)
 
     if not message:
         message.append("No eligible plants processed")
@@ -558,7 +552,7 @@ def stop_feeding_sequence():
             response.raise_for_status()
             data = response.json()
             if data.get('status') == 'success':
-                log_feeding_feedback(f"Local relay {relay_id} turned {action}", plant_ip, 'success', sio)
+                log_feeding_feedback(f"Local relay {relay_id} turned {action}", plant_ip, status, sio)
                 return True
             else:
                 log_feeding_feedback(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}", plant_ip, 'error', sio)

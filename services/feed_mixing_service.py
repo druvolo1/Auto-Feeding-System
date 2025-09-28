@@ -58,18 +58,33 @@ def monitor_feed_mixing(socketio, app):
     components_off = False  # Flag to track if components have been turned off
     while True:
         with app.app_context():  # Create application context
+            if stop_feeding_flag:
+                # Ensure components are off if sequence is stopped
+                if not components_off:
+                    settings = load_settings()
+                    feed_relay = settings.get('relay_ports', {}).get('feed_water')
+                    fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
+                    control_feed_pump_api('off', socketio, None)
+                    if feed_relay:
+                        control_local_relay(feed_relay, 'off', socketio, None)
+                    if fresh_relay:
+                        control_local_relay(fresh_relay, 'off', socketio, None)
+                    log_feeding_feedback("Feed mixing stopped due to feeding sequence interruption, turned off pump and relays", status='info', sio=socketio)
+                    components_off = True
+                    mixed = False
+                eventlet.sleep(0.01)
+                continue
+
             phase = app.config.get('current_feeding_phase', 'idle')
             plant_ip = app.config.get('current_plant_ip')
-            #log_feeding_feedback(f"Checking phase for {plant_ip}: {phase}, mixed: {mixed}, components_off: {components_off}", plant_ip, 'debug', socketio)
 
             if phase == 'fill' and plant_ip and not mixed:
-                components_off = False  # Reset when starting new fill phase
                 # Get system_volume from plant data
                 with app.config['plant_lock']:
                     system_volume = app.config['plant_data'].get(plant_ip, {}).get('settings', {}).get('system_volume', 0)
                 if system_volume == 0 or system_volume == 'N/A':
                     log_feeding_feedback(f"No valid system_volume for {plant_ip}, skipping mixing", plant_ip, 'warning', socketio)
-                    eventlet.sleep(0.05)
+                    eventlet.sleep(0.01)
                     continue
 
                 # Calculate target feed volume
@@ -98,6 +113,7 @@ def monitor_feed_mixing(socketio, app):
                     log_feeding_feedback(f"No feed_water relay defined, skipping feed relay control", plant_ip, 'warning', socketio)
 
                 mixed = True
+                components_off = False
 
                 # Monitor feed total volume and phase
                 while True:
@@ -130,8 +146,9 @@ def monitor_feed_mixing(socketio, app):
                             control_local_relay(fresh_relay, 'off', socketio, plant_ip)
                         log_feeding_feedback(f"Target feed volume {target_feed_volume:.2f} Gal reached for {plant_ip} (actual: {feed_total:.2f} Gal), turned off feed pump and relays", plant_ip, 'success', socketio)
                         components_off = True
+                        mixed = False
                         break
-                    eventlet.sleep(0.05)  # Faster check for volume and phase
+                    eventlet.sleep(0.01)  # Faster check for volume and phase
 
             if mixed and phase != 'fill' and not components_off:
                 # Ensure components are off if phase changes unexpectedly
@@ -149,4 +166,4 @@ def monitor_feed_mixing(socketio, app):
             elif mixed and phase != 'fill':
                 log_feeding_feedback(f"Feed mixing cycle for {plant_ip} already cleaned up", plant_ip, 'debug', socketio)
                 mixed = False  # Safety reset
-        eventlet.sleep(0.05)  # Faster main loop
+        eventlet.sleep(0.01)  # Faster main loop
