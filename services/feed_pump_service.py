@@ -1,150 +1,210 @@
-import RPi.GPIO as GPIO
+import time
 import requests
+from flask import current_app
 from utils.settings_utils import load_settings
-from .feeding_service import log_feeding_feedback, send_notification
+from services.feed_flow_service import get_total_volume as get_feed_total_volume
+from services.log_service import log_event
+from .feeding_service import log_feeding_feedback, stop_feeding_flag, send_notification
+import eventlet
 
-def control_feed_pump(io_number=None, pump_type='io', state=None, get_status=False):
+def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'):
     """
-    Control the feed pump (on/off) or get its status.
-    state: 1 for ON, 0 for OFF, None for status check.
-    pump_type: 'io' for GPIO-based pump, 'shelly' for Shelly-based pump.
+    Control a local relay via the internal API endpoint.
     """
-    settings = load_settings()
-    feed_pump = settings.get('feed_pump', {})
-    
-    # Use provided pump_type or fall back to settings
-    pump_type = pump_type or feed_pump.get('type', 'io')
-
-    if pump_type == 'io':
-        io_number = io_number or feed_pump.get('io_number')
-        if not io_number:
-            log_feeding_feedback("Feed pump IO number not configured", status='error')
-            send_notification("Feed pump IO number not configured")
-            raise ValueError("Feed pump IO number not configured")
-    elif pump_type == 'shelly':
-        ip = feed_pump.get('ip')
-        if not ip:
-            log_feeding_feedback("Feed pump IP not configured for Shelly", status='error')
-            send_notification("Feed pump IP not configured for Shelly")
-            raise ValueError("Feed pump IP not configured for Shelly")
-    else:
-        log_feeding_feedback(f"Unsupported pump type: {pump_type}", status='error')
-        send_notification(f"Unsupported pump type: {pump_type}")
-        raise ValueError("Unsupported pump type")
-
+    url = f"http://127.0.0.1:8000/api/valve_relay/{relay_id}/{action}"
     try:
-        if pump_type == 'io':
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(int(io_number), GPIO.OUT)
-
-            if get_status:
-                # Get current GPIO state (0=OFF, 1=ON for active-high logic)
-                current_state = GPIO.input(int(io_number))
-                return current_state  # Active-high: 1=ON, 0=OFF
-
-            if state is None:
-                log_feeding_feedback("No state provided for feed pump control", status='error')
-                send_notification("No state provided for feed pump control")
-                return False
-
-            # Active-high logic: 1=ON, 0=OFF
-            GPIO.output(int(io_number), state)  # Set pin to state directly
-            log_feeding_feedback(f"Feed pump turned {'ON' if state == 1 else 'OFF'} on IO {io_number}", status='success')
+        response = requests.post(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        if data.get('status') == 'success':
+            log_feeding_feedback(f"Local relay {relay_id} turned {action}", plant_ip, status, sio)
             return True
-
-        elif pump_type == 'shelly':
-            if get_status:
-                status_url = f"http://{ip}/relay/0"
-                response = requests.get(status_url, timeout=5)
-                response.raise_for_status()
-                data = response.json()
-                log_feeding_feedback(f"Got feed pump status from Shelly at {ip}: {'ON' if data.get('ison', False) else 'OFF'}", status='debug')
-                return 1 if data.get('ison', False) else 0  # 1=ON, 0=OFF
-
-            if state is None:
-                log_feeding_feedback("No state provided for feed pump control", status='error')
-                send_notification("No state provided for feed pump control")
-                return False
-
-            url = f"http://{ip}/relay/0?turn={'on' if state == 1 else 'off'}"
-            response = requests.get(url, timeout=5)
-            response.raise_for_status()
-            log_feeding_feedback(f"Feed pump turned {'ON' if state == 1 else 'OFF'} on Shelly at {ip}", status='success')
-            return True
-
+        else:
+            log_feeding_feedback(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}", plant_ip, 'error', sio)
+            send_notification(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}")
+            return False
     except Exception as e:
-        log_feeding_feedback(f"Error controlling feed pump ({pump_type}): {str(e)}", status='error')
-        send_notification(f"Error controlling feed pump ({pump_type}): {str(e)}")
-        raise
-    """
-    Control the feed pump (on/off) or get its status.
-    state: 1 for ON, 0 for OFF, None for status check.
-    pump_type: 'io' for GPIO-based pump, 'shelly' for Shelly-based pump.
-    """
-    settings = load_settings()
-    feed_pump = settings.get('feed_pump', {})
-    
-    # Use provided pump_type or fall back to settings
-    pump_type = pump_type or feed_pump.get('type', 'io')
+        log_feeding_feedback(f"Error controlling local relay {relay_id}: {str(e)}", plant_ip, 'error', sio)
+        send_notification(f"Error controlling local relay {relay_id}: {str(e)}")
+        return False
 
-    if pump_type == 'io':
-        io_number = io_number or feed_pump.get('io_number')
-        if not io_number:
-            log_feeding_feedback("Feed pump IO number not configured", status='error')
-            send_notification("Feed pump IO number not configured")
-            raise ValueError("Feed pump IO number not configured")
-    elif pump_type == 'shelly':
-        ip = feed_pump.get('ip')
-        if not ip:
-            log_feeding_feedback("Feed pump IP not configured for Shelly", status='error')
-            send_notification("Feed pump IP not configured for Shelly")
-            raise ValueError("Feed pump IP not configured for Shelly")
-    else:
-        log_feeding_feedback(f"Unsupported pump type: {pump_type}", status='error')
-        send_notification(f"Unsupported pump type: {pump_type}")
-        raise ValueError("Unsupported pump type")
-
+def control_feed_pump_api(action, sio=None, plant_ip=None):
+    """
+    Control the feed pump via the /api/feed_pump/{action} endpoint.
+    action: 'on' or 'off'
+    """
+    url = f"http://127.0.0.1:8000/api/feed_pump/{action}"
     try:
-        if pump_type == 'io':
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(int(io_number), GPIO.OUT)
-
-            if get_status:
-                # Get current GPIO state (0=ON, 1=OFF assuming active-low logic)
-                current_state = GPIO.input(int(io_number))
-                return 1 if current_state == 0 else 0  # Convert to 1=ON, 0=OFF
-
-            if state is None:
-                log_feeding_feedback("No state provided for feed pump control", status='error')
-                send_notification("No state provided for feed pump control")
-                return False
-
-            # Active-low logic: 0=ON, 1=OFF
-            GPIO.output(int(io_number), 0 if state == 1 else 1)
-            log_feeding_feedback(f"Feed pump turned {'ON' if state == 1 else 'OFF'} on IO {io_number}", status='success')
+        response = requests.post(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        if data.get('status') == 'success':
+            log_feeding_feedback(f"Feed pump turned {action.upper()}", plant_ip, 'success', sio)
             return True
-
-        elif pump_type == 'shelly':
-            if get_status:
-                status_url = f"http://{ip}/relay/0"
-                response = requests.get(status_url, timeout=5)
-                response.raise_for_status()
-                data = response.json()
-                log_feeding_feedback(f"Got feed pump status from Shelly at {ip}: {'ON' if data.get('ison', False) else 'OFF'}", status='debug')
-                return 1 if data.get('ison', False) else 0  # 1=ON, 0=OFF
-
-            if state is None:
-                log_feeding_feedback("No state provided for feed pump control", status='error')
-                send_notification("No state provided for feed pump control")
-                return False
-
-            url = f"http://{ip}/relay/0?turn={'on' if state == 1 else 'off'}"
-            response = requests.get(url, timeout=5)
-            response.raise_for_status()
-            log_feeding_feedback(f"Feed pump turned {'ON' if state == 1 else 'OFF'} on Shelly at {ip}", status='success')
-            return True
-
+        else:
+            log_feeding_feedback(f"Failed to turn {action} feed pump: {data.get('error')}", plant_ip, 'error', sio)
+            send_notification(f"Failed to turn {action} feed pump: {data.get('error')}")
+            return False
     except Exception as e:
-        log_feeding_feedback(f"Error controlling feed pump ({pump_type}): {str(e)}", status='error')
-        send_notification(f"Error controlling feed pump ({pump_type}): {str(e)}")
-        raise
+        log_feeding_feedback(f"Error controlling feed pump via API ({action}): {str(e)}", plant_ip, 'error', sio)
+        send_notification(f"Error controlling feed pump via API ({action}): {str(e)}")
+        return False
+
+def monitor_feed_mixing(socketio, app):
+    """
+    Background monitor that runs continuously to handle feed mixing during the fill phase.
+    """
+    mixed = False  # Flag to track if mixing has started for the current fill phase
+    components_off = False  # Flag to track if components have been turned off
+    last_processed_plant = None  # Track the last plant processed
+    mixing_completed = False  # Flag to track if mixing has completed for the current plant
+
+    while True:
+        with app.app_context():  # Create application context
+            if stop_feeding_flag:
+                # Ensure components are off if sequence is stopped
+                if not components_off:
+                    settings = load_settings()
+                    feed_relay = settings.get('relay_ports', {}).get('feed_water')
+                    fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
+                    control_feed_pump_api('off', socketio, None)
+                    if feed_relay:
+                        control_local_relay(feed_relay, 'off', socketio, None)
+                    if fresh_relay:
+                        control_local_relay(fresh_relay, 'off', socketio, None)
+                    log_feeding_feedback("Feed mixing stopped due to feeding sequence interruption, turned off pump and relays", status='info', sio=socketio)
+                    components_off = True
+                    mixed = False
+                    mixing_completed = False
+                    last_processed_plant = None
+                eventlet.sleep(0.1)  # Longer sleep to reduce race conditions
+                continue
+
+            phase = app.config.get('current_feeding_phase', 'idle')
+            plant_ip = app.config.get('current_plant_ip')
+            use_feed = app.config.get('use_feed', True)
+
+            # Reset flags when moving to a new plant or phase changes
+            if plant_ip != last_processed_plant or phase != 'fill':
+                mixed = False
+                components_off = False
+                mixing_completed = False
+                last_processed_plant = plant_ip
+                log_feeding_feedback(f"Reset mixing state for new plant {plant_ip} or phase change to {phase}", plant_ip, 'debug', socketio)
+
+            if phase == 'fill' and plant_ip and not mixed and use_feed and not mixing_completed:
+                # Get system_volume from plant data
+                with app.config['plant_lock']:
+                    system_volume = app.config['plant_data'].get(plant_ip, {}).get('settings', {}).get('system_volume', 0)
+                if system_volume == 0 or system_volume == 'N/A':
+                    log_feeding_feedback(f"No valid system_volume for {plant_ip}, skipping mixing", plant_ip, 'warning', socketio)
+                    mixing_completed = True  # Prevent re-attempting for this plant
+                    eventlet.sleep(0.1)
+                    continue
+
+                # Calculate target feed volume
+                settings = load_settings()
+                ratio = settings.get('nutrient_concentration', 1)
+                if ratio <= 0:
+                    ratio = 1  # Prevent division by zero
+                target_feed_volume = system_volume / (ratio + 1)
+                log_feeding_feedback(f"Starting feed mixing for {plant_ip}, target feed volume: {target_feed_volume:.2f} Gal", plant_ip, 'info', socketio)
+
+                # Get relay ports
+                feed_relay = settings.get('relay_ports', {}).get('feed_water')
+                fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
+
+                # Turn on feed pump via API
+                if not control_feed_pump_api('on', socketio, plant_ip):
+                    log_feeding_feedback(f"Failed to start feed pump for {plant_ip}, aborting mixing", plant_ip, 'error', socketio)
+                    mixing_completed = True
+                    eventlet.sleep(0.1)
+                    continue
+
+                # Turn on fresh relay (if defined)
+                if fresh_relay and not control_local_relay(fresh_relay, 'on', socketio, plant_ip):
+                    log_feeding_feedback(f"Failed to turn on fresh relay for {plant_ip}, aborting mixing", plant_ip, 'error', socketio)
+                    control_feed_pump_api('off', socketio, plant_ip)
+                    mixing_completed = True
+                    eventlet.sleep(0.1)
+                    continue
+
+                # Turn on feed relay
+                if feed_relay and not control_local_relay(feed_relay, 'on', socketio, plant_ip):
+                    log_feeding_feedback(f"No feed_water relay defined or failed to turn on, skipping feed relay control", plant_ip, 'warning', socketio)
+                    control_feed_pump_api('off', socketio, plant_ip)
+                    if fresh_relay:
+                        control_local_relay(fresh_relay, 'off', socketio, plant_ip)
+                    mixing_completed = True
+                    eventlet.sleep(0.1)
+                    continue
+
+                mixed = True
+                components_off = False
+                log_feeding_feedback(f"Feed mixing started for {plant_ip}, mixed={mixed}, components_off={components_off}, mixing_completed={mixing_completed}", plant_ip, 'debug', socketio)
+
+                # Monitor feed total volume and phase
+                while True:
+                    with app.app_context():  # Refresh context inside loop
+                        phase = app.config.get('current_feeding_phase', 'idle')
+                        plant_ip = app.config.get('current_plant_ip')
+
+                    if stop_feeding_flag or phase != 'fill':
+                        # Turn off feed pump and relays on interruption or phase change
+                        control_feed_pump_api('off', socketio, plant_ip)
+                        if feed_relay:
+                            control_local_relay(feed_relay, 'off', socketio, plant_ip)
+                        if fresh_relay:
+                            control_local_relay(fresh_relay, 'off', socketio, plant_ip)
+                        if stop_feeding_flag:
+                            log_feeding_feedback(f"Feed mixing interrupted for {plant_ip}, turned off pump and relays", plant_ip, 'error', socketio)
+                        else:
+                            log_feeding_feedback(f"Fill phase completed for {plant_ip}, turned off feed pump and relays", plant_ip, 'info', socketio)
+                        components_off = True
+                        mixed = False
+                        mixing_completed = True
+                        last_processed_plant = plant_ip
+                        break
+
+                    feed_total = get_feed_total_volume()
+                    if feed_total >= target_feed_volume and not components_off:
+                        # Turn off feed pump and relays when target volume is reached
+                        control_feed_pump_api('off', socketio, plant_ip)
+                        if feed_relay:
+                            control_local_relay(feed_relay, 'off', socketio, plant_ip)
+                        if fresh_relay:
+                            control_local_relay(fresh_relay, 'off', socketio, plant_ip)
+                        log_feeding_feedback(f"Target feed volume {target_feed_volume:.2f} Gal reached for {plant_ip} (actual: {feed_total:.2f} Gal), turned off feed pump and relays", plant_ip, 'success', socketio)
+                        components_off = True
+                        mixed = False
+                        mixing_completed = True
+                        last_processed_plant = plant_ip
+                        break
+                    eventlet.sleep(0.01)  # Fast check for volume and phase
+
+            if mixed and phase != 'fill' and not components_off:
+                # Ensure components are off if phase changes unexpectedly
+                settings = load_settings()
+                feed_relay = settings.get('relay_ports', {}).get('feed_water')
+                fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
+                control_feed_pump_api('off', socketio, plant_ip)
+                if feed_relay:
+                    control_local_relay(feed_relay, 'off', socketio, plant_ip)
+                if fresh_relay:
+                    control_local_relay(fresh_relay, 'off', socketio, plant_ip)
+                log_feeding_feedback(f"Fill phase ended unexpectedly for {plant_ip}, turned off feed pump and relays", plant_ip, 'info', socketio)
+                components_off = True
+                mixed = False
+                mixing_completed = True
+                last_processed_plant = plant_ip
+            elif mixed and phase != 'fill':
+                log_feeding_feedback(f"Feed mixing cycle for {plant_ip} already cleaned up", plant_ip, 'debug', socketio)
+                mixed = False
+                mixing_completed = True
+                last_processed_plant = plant_ip
+            elif phase == 'fill' and plant_ip and not use_feed:
+                log_feeding_feedback(f"Skipping feed mixing for {plant_ip} due to use_feed=False", plant_ip, 'debug', socketio)
+            elif phase == 'fill' and plant_ip and mixing_completed:
+                log_feeding_feedback(f"Skipping feed mixing for {plant_ip} as mixing already completed", plant_ip, 'debug', socketio)
+        eventlet.sleep(0.1)
+        
