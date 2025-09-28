@@ -28,11 +28,12 @@ def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'
         send_notification(f"Error controlling local relay {relay_id}: {str(e)}")
         return False
 
-def control_feed_pump_api(action, sio=None, plant_ip=None):
+def control_feed_pump(state, sio=None, plant_ip=None):
     """
-    Control the feed pump via the /api/feed_pump/{action} endpoint.
-    action: 'on' or 'off'
+    Control the feed pump via an API endpoint.
+    state: 0 for off, 1 for on
     """
+    action = 'on' if state == 1 else 'off'
     url = f"http://127.0.0.1:8000/api/feed_pump/{action}"
     try:
         response = requests.post(url, timeout=5)
@@ -40,6 +41,7 @@ def control_feed_pump_api(action, sio=None, plant_ip=None):
         data = response.json()
         if data.get('status') == 'success':
             log_feeding_feedback(f"Feed pump turned {action.upper()}", plant_ip, 'success', sio)
+            log_feeding_feedback(f"Feed pump turned {action.upper()} on IO 25", plant_ip, 'success', sio)
             return True
         else:
             log_feeding_feedback(f"Failed to turn {action} feed pump: {data.get('error')}", plant_ip, 'error', sio)
@@ -207,4 +209,3 @@ def monitor_feed_mixing(socketio, app):
             elif phase == 'fill' and plant_ip and mixing_completed:
                 log_feeding_feedback(f"Skipping feed mixing for {plant_ip} as mixing already completed", plant_ip, 'debug', socketio)
         eventlet.sleep(0.1)
-        
