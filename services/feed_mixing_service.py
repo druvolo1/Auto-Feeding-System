@@ -126,7 +126,7 @@ def monitor_feed_mixing(socketio, app):
                         control_feed_pump_api('off', socketio, plant_ip)
                         if feed_relay:
                             control_local_relay(feed_relay, 'off', socketio, plant_ip)
-                        f fresh_relay:
+                        if fresh_relay:
                             control_local_relay(fresh_relay, 'off', socketio, plant_ip)
                         log_feeding_feedback(f"Target feed volume {target_feed_volume:.2f} Gal reached for {plant_ip} (actual: {feed_total:.2f} Gal), turned off feed pump and relays", plant_ip, 'success', socketio)
                         components_off = True
