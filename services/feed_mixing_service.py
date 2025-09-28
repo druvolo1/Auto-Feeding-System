@@ -72,7 +72,7 @@ def monitor_feed_mixing(socketio, app):
                 components_off = False
                 mixing_completed = False
                 last_processed_plant = plant_ip
-                log_feeding_feedback(f"Reset mixing state for new plant {plant_ip} or phase change to {phase}", plant_ip, 'debug', socketio)
+                #log_feeding_feedback(f"Reset mixing state for new plant {plant_ip} or phase change to {phase}", plant_ip, 'debug', socketio)
 
             if phase == 'fill' and plant_ip and not mixed and use_feed and not mixing_completed:
                 # Get system_volume from plant data
