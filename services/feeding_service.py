@@ -267,13 +267,23 @@ def start_feeding_sequence():
     nutrient_concentration = global_settings.get('nutrient_concentration', 1)
     use_feed = nutrient_concentration > 0
 
+    # Check feed level before processing any plants if nutrients are required
+    if use_feed:
+        feed_level = get_feed_level()
+        if feed_level == 'Empty':
+            log_feeding_feedback("Feed reservoir is empty before starting feeding sequence. Stopping.", status='error', sio=socketio_instance)
+            send_notification(f"Feed reservoir is empty before starting feeding sequence. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
+            message.append("Stopped: Feed reservoir empty")
+            stop_feeding_sequence()
+            return "Feeding sequence stopped: Feed reservoir empty"
+
     for plant_ip in list(plant_clients.keys()):
         local_use_feed = use_feed
         if use_feed:
             feed_level = get_feed_level()
             if feed_level == 'Empty':
-                log_feeding_feedback(f"Feed reservoir is empty before filling plant {plant_ip}. Filling with fresh only.", plant_ip, status='warning', sio=socketio_instance)
-                send_notification(f"Feed reservoir is empty for plant {plant_ip}. Filling with fresh only.")
+                log_feeding_feedback(f"Feed reservoir ran out during plant {plant_ip}. Filling with fresh only.", plant_ip, status='warning', sio=socketio_instance)
+                send_notification(f"Feed reservoir ran out during plant {plant_ip}. Filling with fresh only.")
                 local_use_feed = False
                 had_empty = True
             else:
@@ -514,12 +524,15 @@ def start_feeding_sequence():
         completed_plants.append(plant_ip)
         remaining_plants.remove(plant_ip)
 
-        # If had empty during this plant, stop after finishing it
-        if had_empty:
-            log_feeding_feedback(f"Feed reservoir was empty during plant {plant_ip}, terminating sequence after this plant.", status='info', sio=socketio_instance)
-            send_notification(f"Feed reservoir ran out during plant {plant_ip}. Sequence terminated after completing it. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
-            stop_feeding_sequence()
-            break
+        # Check feed level after completing the current plant, before moving to the next one
+        if use_feed and not had_empty:
+            feed_level = get_feed_level()
+            if feed_level == 'Empty':
+                log_feeding_feedback(f"Feed reservoir ran out after completing plant {plant_ip}. Stopping feeding sequence.", plant_ip, status='error', sio=socketio_instance)
+                send_notification(f"Feed reservoir ran out after completing plant {plant_ip}. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
+                message.append(f"Stopped after {plant_ip}: Feed reservoir empty")
+                stop_feeding_sequence()
+                break
 
     with current_app.app_context():
         current_app.config['feeding_sequence_active'] = False
@@ -599,7 +612,6 @@ def stop_feeding_sequence():
 
         try:
             plant_clients[plant_ip].emit('stop_feeding', namespace='/status')
-            # Removed resetting feeding_in_progress to False here
             log_feeding_feedback(f"Emitted stop_feeding for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
         except Exception as e:
             log_feeding_feedback(f"Failed to emit stop_feeding for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
