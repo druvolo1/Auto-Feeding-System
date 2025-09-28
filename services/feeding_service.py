@@ -225,7 +225,6 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
 def start_feeding_sequence():
     """Start the feeding sequence for all eligible plants sequentially."""
     global stop_feeding_flag, drain_complete
-    stop_feeding_flag = False  # Reset the flag at the start of each sequence
     with current_app.app_context():
         current_app.config['feeding_sequence_active'] = True
         current_app.config['current_feeding_phase'] = 'idle'  # Initialize phase
@@ -262,6 +261,10 @@ def start_feeding_sequence():
         socketio_instance.emit('feeding_sequence_state', {'active': False}, namespace='/status')
         return "No plants configured for feeding"
 
+    global_settings = load_settings()
+    nutrient_concentration = global_settings.get('nutrient_concentration', 1)
+    use_feed = nutrient_concentration > 0
+
     for plant_ip in list(plant_clients.keys()):
         with current_app.app_context():
             current_app.config['current_plant_ip'] = plant_ip
@@ -273,6 +276,19 @@ def start_feeding_sequence():
             message.append("Feeding sequence interrupted")
             stop_feeding_sequence()
             break
+
+        # Check feed level before starting the process for this plant, but only if using feed
+        if use_feed:
+            feed_level = get_feed_level()
+            if feed_level == 'Empty':
+                log_feeding_feedback(f"Feed reservoir is empty before processing plant {plant_ip}. Stopping feeding sequence.", plant_ip, status='error', sio=socketio_instance)
+                send_notification(f"Feed reservoir ran out before processing plant {plant_ip}. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
+                message.append(f"Stopped {plant_ip}: Feed reservoir empty")
+                stop_feeding_sequence()
+                break
+            log_feeding_feedback(f"Feed reservoir level is {feed_level}, proceeding with plant {plant_ip}", plant_ip, status='info', sio=socketio_instance)
+        else:
+            log_feeding_feedback(f"Nutrient concentration is 0, proceeding with fresh water only for plant {plant_ip}", plant_ip, status='info', sio=socketio_instance)
 
         reset_fresh_total()
         reset_feed_total()
@@ -406,18 +422,6 @@ def start_feeding_sequence():
 
         with current_app.app_context():
             current_app.config['current_feeding_phase'] = 'fill'
-
-        # Check feed level sensor before filling
-        feed_level = get_feed_level()
-        if feed_level == 'Empty':
-            log_feeding_feedback(f"Feed reservoir is empty before filling plant {plant_ip}. Stopping feeding sequence.", plant_ip, status='error', sio=socketio_instance)
-            send_notification(f"Feed reservoir ran out before feeding plant {plant_ip}. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
-            message.append(f"Stopped {plant_ip}: Feed reservoir empty")
-            # Do not reset feeding_in_progress for remote systems in this case
-            stop_feeding_sequence()
-            break
-
-        log_feeding_feedback(f"Feed reservoir level is {feed_level}, proceeding with fill for plant {plant_ip}", plant_ip, status='info', sio=socketio_instance)
 
         log_feeding_feedback(f"Turning on fill valve {fill_valve} ({fill_valve_label}) at {fill_valve_ip} for plant {plant_ip}", plant_ip, status='info', sio=socketio_instance)
         if not control_valve(plant_ip, fill_valve_ip, fill_valve, 'on', sio=socketio_instance):
