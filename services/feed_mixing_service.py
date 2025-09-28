@@ -56,7 +56,7 @@ def monitor_feed_mixing(socketio, app):
     """
     mixed = False  # Flag to track if mixing has started for the current fill phase
     components_off = False  # Flag to track if components have been turned off
-    current_plant_ip = None  # Track the current plant to prevent re-mixing for the same plant
+    last_processed_plant = None  # Track the last plant processed to prevent re-mixing
 
     while True:
         with app.app_context():  # Create application context
@@ -74,28 +74,28 @@ def monitor_feed_mixing(socketio, app):
                     log_feeding_feedback("Feed mixing stopped due to feeding sequence interruption, turned off pump and relays", status='info', sio=socketio)
                     components_off = True
                     mixed = False
-                    current_plant_ip = None
-                eventlet.sleep(0.05)  # Slightly longer sleep to reduce race conditions
+                    last_processed_plant = None
+                eventlet.sleep(0.1)  # Longer sleep to reduce race conditions
                 continue
 
             phase = app.config.get('current_feeding_phase', 'idle')
             plant_ip = app.config.get('current_plant_ip')
             use_feed = app.config.get('use_feed', True)
 
-            # Reset flags when moving to a new plant
-            if plant_ip != current_plant_ip:
+            # Reset flags only when moving to a new plant
+            if plant_ip != last_processed_plant and phase != 'fill':
                 mixed = False
                 components_off = False
-                current_plant_ip = plant_ip
+                last_processed_plant = plant_ip
                 log_feeding_feedback(f"Reset mixing state for new plant {plant_ip}", plant_ip, 'debug', socketio)
 
-            if phase == 'fill' and plant_ip and not mixed and use_feed:
+            if phase == 'fill' and plant_ip and not mixed and use_feed and plant_ip != last_processed_plant:
                 # Get system_volume from plant data
                 with app.config['plant_lock']:
                     system_volume = app.config['plant_data'].get(plant_ip, {}).get('settings', {}).get('system_volume', 0)
                 if system_volume == 0 or system_volume == 'N/A':
                     log_feeding_feedback(f"No valid system_volume for {plant_ip}, skipping mixing", plant_ip, 'warning', socketio)
-                    eventlet.sleep(0.05)
+                    eventlet.sleep(0.1)
                     continue
 
                 # Calculate target feed volume
@@ -146,7 +146,7 @@ def monitor_feed_mixing(socketio, app):
                             log_feeding_feedback(f"Fill phase completed for {plant_ip}, turned off feed pump and relays", plant_ip, 'info', socketio)
                         components_off = True
                         mixed = False
-                        current_plant_ip = None
+                        last_processed_plant = plant_ip
                         break
 
                     feed_total = get_feed_total_volume()
@@ -160,7 +160,7 @@ def monitor_feed_mixing(socketio, app):
                         log_feeding_feedback(f"Target feed volume {target_feed_volume:.2f} Gal reached for {plant_ip} (actual: {feed_total:.2f} Gal), turned off feed pump and relays", plant_ip, 'success', socketio)
                         components_off = True
                         mixed = False
-                        current_plant_ip = None
+                        last_processed_plant = plant_ip
                         break
                     eventlet.sleep(0.01)  # Fast check for volume and phase
 
@@ -177,9 +177,10 @@ def monitor_feed_mixing(socketio, app):
                 log_feeding_feedback(f"Fill phase ended unexpectedly for {plant_ip}, turned off feed pump and relays", plant_ip, 'info', socketio)
                 components_off = True
                 mixed = False
-                current_plant_ip = None
+                last_processed_plant = plant_ip
             elif mixed and phase != 'fill':
                 log_feeding_feedback(f"Feed mixing cycle for {plant_ip} already cleaned up", plant_ip, 'debug', socketio)
-                mixed = False  # Safety reset
-                current_plant_ip = None
-        eventlet.sleep(0.05)  # Slightly longer sleep to reduce race conditions
+                mixed = False
+                last_processed_plant = plant_ip
+        eventlet.sleep(0.1)  # Longer sleep to reduce race conditions
+        
