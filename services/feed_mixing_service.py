@@ -82,14 +82,14 @@ def monitor_feed_mixing(socketio, app):
             plant_ip = app.config.get('current_plant_ip')
             use_feed = app.config.get('use_feed', True)
 
-            # Reset flags only when moving to a new plant
-            if plant_ip != last_processed_plant and phase != 'fill':
+            # Reset flags when moving to a new plant
+            if plant_ip != last_processed_plant:
                 mixed = False
                 components_off = False
                 last_processed_plant = plant_ip
                 log_feeding_feedback(f"Reset mixing state for new plant {plant_ip}", plant_ip, 'debug', socketio)
 
-            if phase == 'fill' and plant_ip and not mixed and use_feed and plant_ip != last_processed_plant:
+            if phase == 'fill' and plant_ip and not mixed and use_feed:
                 # Get system_volume from plant data
                 with app.config['plant_lock']:
                     system_volume = app.config['plant_data'].get(plant_ip, {}).get('settings', {}).get('system_volume', 0)
@@ -182,5 +182,6 @@ def monitor_feed_mixing(socketio, app):
                 log_feeding_feedback(f"Feed mixing cycle for {plant_ip} already cleaned up", plant_ip, 'debug', socketio)
                 mixed = False
                 last_processed_plant = plant_ip
+            elif phase == 'fill' and plant_ip and not use_feed:
+                log_feeding_feedback(f"Skipping feed mixing for {plant_ip} due to use_feed=False", plant_ip, 'debug', socketio)
         eventlet.sleep(0.1)  # Longer sleep to reduce race conditions
-        
