@@ -104,8 +104,8 @@ def wait_for_valve_off(plant_ip, valve_ip, valve_id, valve_label, timeout=10, si
     start_time = time.time()
     while time.time() - start_time < timeout:
         if stop_feeding_flag:
-            log_feeding_feedback(f"Feeding interrupted by user for plant {plant_ip}", plant_ip, status='error', sio=sio)
-            send_notification(f"Feeding interrupted by user for plant {plant_ip}")
+            log_feeding_feedback(f"Feeding interrupted for plant {plant_ip}", plant_ip, status='error', sio=sio)
+            send_notification(f"Feeding interrupted for plant {plant_ip}")
             return False
         with current_app.config['plant_lock']:
             plant_data = current_app.config['plant_data']
@@ -133,8 +133,8 @@ def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retri
         state_changed = False
         while time.time() - start_time < timeout:
             if stop_feeding_flag:
-                log_feeding_feedback(f"Feeding interrupted by user for plant {plant_ip}", plant_ip, status='error', sio=sio)
-                send_notification(f"Feeding interrupted by user for plant {plant_ip}")
+                log_feeding_feedback(f"Feeding interrupted for plant {plant_ip}", plant_ip, status='error', sio=sio)
+                send_notification(f"Feeding interrupted for plant {plant_ip}")
                 return False
             with current_app.config['plant_lock']:
                 plant_data = current_app.config['plant_data']
@@ -144,9 +144,10 @@ def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retri
                     log_feeding_feedback(f"Sensor {sensor_label} reached expected state (triggered={expected_triggered}) after change from {initial_triggered} for plant {plant_ip}", plant_ip, status='success', sio=sio)
                     return True
             time.sleep(1)
-        log_feeding_feedback(f"Timeout waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} (attempt {attempt+1}/{retries})", plant_ip, status='warning', sio=sio)
-        if attempt == retries - 1:
-            send_notification(f"Failed waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} after {retries} attempts")
+        if not state_changed:
+            log_feeding_feedback(f"Timeout waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} (attempt {attempt+1}/{retries})", plant_ip, status='warning', sio=sio)
+            if attempt == retries - 1:
+                send_notification(f"Failed waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} after {retries} attempts")
         if attempt < retries - 1:
             time.sleep(5)
     log_feeding_feedback(f"Failed waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} after {retries} attempts", plant_ip, status='error', sio=sio)
@@ -179,8 +180,8 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
 
         while time.time() - start_time < max_drain_time:
             if stop_feeding_flag:
-                log_feeding_feedback(f"Feeding interrupted by user during drain conditions monitoring for plant {plant_ip}", plant_ip, status='error', sio=sio)
-                send_notification(f"Feeding interrupted by user during drain conditions monitoring for plant {plant_ip}")
+                log_feeding_feedback(f"Feeding interrupted during drain conditions monitoring for plant {plant_ip}", plant_ip, status='error', sio=sio)
+                send_notification(f"Feeding interrupted during drain conditions monitoring for plant {plant_ip}")
                 drain_complete = {'status': False, 'reason': 'interrupted'}
                 control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
                 return
@@ -224,6 +225,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
 def start_feeding_sequence():
     """Start the feeding sequence for all eligible plants sequentially."""
     global stop_feeding_flag, drain_complete
+    stop_feeding_flag = False  # Reset the flag at the start of each sequence
     with current_app.app_context():
         current_app.config['feeding_sequence_active'] = True
         current_app.config['current_feeding_phase'] = 'idle'  # Initialize phase
@@ -266,9 +268,9 @@ def start_feeding_sequence():
             current_app.config['current_feeding_phase'] = 'drain'
 
         if stop_feeding_flag:
-            log_feeding_feedback("Feeding sequence stopped by user", status='error', sio=socketio_instance)
-            send_notification(f"Feeding sequence stopped by user. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
-            message.append("Feeding sequence stopped by user")
+            log_feeding_feedback("Feeding sequence interrupted", status='error', sio=socketio_instance)
+            send_notification(f"Feeding sequence interrupted. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
+            message.append("Feeding sequence interrupted")
             stop_feeding_sequence()
             break
 
@@ -362,9 +364,9 @@ def start_feeding_sequence():
         log_feeding_feedback(f"Monitoring drain conditions for {plant_ip}", plant_ip, status='info', sio=socketio_instance)
         while not drain_complete['status']:
             if stop_feeding_flag:
-                log_feeding_feedback(f"Feeding interrupted by user for plant {plant_ip}", plant_ip, status='error', sio=socketio_instance)
-                send_notification(f"Feeding interrupted by user for plant {plant_ip}. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
-                message.append(f"Stopped {plant_ip}: User interrupted during draining")
+                log_feeding_feedback(f"Feeding interrupted for plant {plant_ip}", plant_ip, status='error', sio=socketio_instance)
+                send_notification(f"Feeding interrupted for plant {plant_ip}. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
+                message.append(f"Stopped {plant_ip}: Interrupted during draining")
                 try:
                     response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                     response.raise_for_status()
@@ -411,6 +413,7 @@ def start_feeding_sequence():
             log_feeding_feedback(f"Feed reservoir is empty before filling plant {plant_ip}. Stopping feeding sequence.", plant_ip, status='error', sio=socketio_instance)
             send_notification(f"Feed reservoir ran out before feeding plant {plant_ip}. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
             message.append(f"Stopped {plant_ip}: Feed reservoir empty")
+            # Do not reset feeding_in_progress for remote systems in this case
             stop_feeding_sequence()
             break
 
@@ -448,9 +451,9 @@ def start_feeding_sequence():
         if not wait_for_sensor(plant_ip, full_sensor, False, sio=socketio_instance):
             control_valve(plant_ip, fill_valve_ip, fill_valve, 'off', sio=socketio_instance)
             if stop_feeding_flag:
-                log_feeding_feedback(f"Stopped {plant_ip}: User interrupted during filling", plant_ip, status='error', sio=socketio_instance)
-                send_notification(f"Stopped {plant_ip}: User interrupted during filling. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
-                message.append(f"Stopped {plant_ip}: User interrupted during filling")
+                log_feeding_feedback(f"Stopped {plant_ip}: Interrupted during filling", plant_ip, status='error', sio=socketio_instance)
+                send_notification(f"Stopped {plant_ip}: Interrupted during filling. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
+                message.append(f"Stopped {plant_ip}: Interrupted during filling")
                 try:
                     response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                     response.raise_for_status()
@@ -582,12 +585,11 @@ def stop_feeding_sequence():
 
         try:
             plant_clients[plant_ip].emit('stop_feeding', namespace='/status')
-            response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
-            response.raise_for_status()
-            log_feeding_feedback(f"Reset feeding_in_progress for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
+            # Removed resetting feeding_in_progress to False here
+            log_feeding_feedback(f"Emitted stop_feeding for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
         except Exception as e:
-            log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
-            send_notification(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}")
+            log_feeding_feedback(f"Failed to emit stop_feeding for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
+            send_notification(f"Failed to emit stop_feeding for plant {plant_ip}: {str(e)}")
 
         with current_app.config['plant_lock']:
             plant_data = plants_data.get(plant_ip, {})
