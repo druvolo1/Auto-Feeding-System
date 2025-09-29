@@ -22,21 +22,25 @@ def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'
     """
     Control a local relay via the internal API endpoint.
     """
+    settings = load_settings()
+    relay_ports = settings.get('relay_ports', {})
+    relay_name = next((name for name, id in relay_ports.items() if id == relay_id), f"relay {relay_id}")
+    formatted_name = ' '.join(word.capitalize() for word in relay_name.replace('_', ' ').split()) + " Relay"
     url = f"http://127.0.0.1:8000/api/valve_relay/{relay_id}/{action}"
     try:
         response = requests.post(url, timeout=5)
         response.raise_for_status()
         data = response.json()
         if data.get('status') == 'success':
-            log_feeding_feedback(f"Local relay {relay_id} turned {action}", plant_ip, status, sio)
+            log_feeding_feedback(f"Local {formatted_name} turned {action}", plant_ip, status, sio)
             return True
         else:
-            log_feeding_feedback(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}", plant_ip, 'error', sio)
-            send_notification(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}")
+            log_feeding_feedback(f"Failed to turn {action} local {formatted_name}: {data.get('error')}", plant_ip, 'error', sio)
+            send_notification(f"Failed to turn {action} local {formatted_name}: {data.get('error')}")
             return False
     except Exception as e:
-        log_feeding_feedback(f"Error controlling local relay {relay_id}: {str(e)}", plant_ip, 'error', sio)
-        send_notification(f"Error controlling local relay {relay_id}: {str(e)}")
+        log_feeding_feedback(f"Error controlling local {formatted_name}: {str(e)}", plant_ip, 'error', sio)
+        send_notification(f"Error controlling local {formatted_name}: {str(e)}")
         return False
 
 def monitor_feed_mixing(socketio, app):
