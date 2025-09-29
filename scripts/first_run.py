@@ -8,7 +8,7 @@ SERVICE_PATH = "/etc/systemd/system/feeding.service"
 
 def check_package_manager():
     if distro.id() in ['ubuntu', 'debian']:
-        return ["apt-get", "install", "-y"]
+        return ["apt-get", "install", "-y", "--force-confdef", "--force-confold"]
     else:
         print(f"Unsupported distribution: {distro.id()}. This script requires a Debian/Ubuntu system.")
         sys.exit(1)
@@ -31,7 +31,7 @@ def main():
         print("Error: This script must be run with sudo, not as root directly.")
         sys.exit(1)
     home_dir = f"/home/{user}"
-    auto_feed_dir = f"{home_dir}/Auto-Feeding-System"  # Updated to match actual directory name
+    auto_feed_dir = f"{home_dir}/Auto-Feeding-System"  # Matches your directory name
     venv_dir = f"{auto_feed_dir}/venv"
     requirements_file = f"{auto_feed_dir}/requirements.txt"
 
@@ -59,8 +59,8 @@ WantedBy=multi-user.target
 
     try:
         # 2) Update & upgrade
-        run_command(["apt-get", "update"], "apt-get update")
-        run_command(["apt-get", "upgrade", "-y"], "apt-get upgrade")
+        run_command(["apt-get", "update", "-y", "--force-confdef", "--force-confold"], "apt-get update")
+        run_command(["apt-get", "upgrade", "-y", "--force-confdef", "--force-confold"], "apt-get upgrade")
 
         # 3) Install needed packages
         pkg_install = check_package_manager()
@@ -86,17 +86,24 @@ WantedBy=multi-user.target
         # 6) Enable and start avahi-daemon for mDNS
         run_command(["systemctl", "enable", "avahi-daemon"], "Enable avahi-daemon for mDNS")
         run_command(["systemctl", "start", "avahi-daemon"], "Start avahi-daemon for mDNS")
-        run_command(["ufw", "allow", "5353/udp"], "Allow mDNS traffic through firewall (if ufw is active)")
 
-        # 7) Create the systemd service file
+        # 7) Check and configure ufw for mDNS traffic
+        ufw_check = subprocess.run(["which", "ufw"], capture_output=True)
+        print(f"ufw check return code: {ufw_check.returncode}")  # Debug output
+        if ufw_check.returncode == 0:
+            run_command(["ufw", "allow", "5353/udp"], "Allow mDNS traffic through firewall (if ufw is active)")
+        else:
+            print("ufw not installed, skipping firewall configuration for mDNS.")
+
+        # 8) Create the systemd service file
         print(f"\n=== Creating systemd service at {SERVICE_PATH} ===")
         with open(SERVICE_PATH, "w") as f:
             f.write(SERVICE_CONTENT)
 
-        # 8) Reload systemd
+        # 9) Reload systemd
         run_command(["systemctl", "daemon-reload"], "Reload systemd")
 
-        # 9) Enable and start the Feeding service
+        # 10) Enable and start the Feeding service
         run_command(["systemctl", "enable", "feeding.service"], "Enable feeding.service on startup")
         run_command(["systemctl", "start", "feeding.service"], "Start feeding.service now")
 
