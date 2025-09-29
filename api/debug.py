@@ -13,7 +13,8 @@ debug_states = {
     'plants': False,
     'dns-resolution': False,
     'local-websocket': False,
-    'notifications': False  # Added notifications debug flag
+    'notifications': False,
+    'feeding-extended-log': False  # Added for extended feeding logs
 }
 
 SETTINGS_FILE = os.path.join(os.getcwd(), "data", "settings.json")

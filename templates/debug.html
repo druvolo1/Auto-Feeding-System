@@ -65,59 +65,53 @@
 </head>
 <body>
     <nav>
-        <ul>
-            <li><a href="/">Home</a></li>
-            <li><a href="/settings">Settings</a></li>
-            <li><a href="/debug" class="active">Debug</a></li>
-            <li><a href="/logs">Logs</a></li>
-        </ul>
+        <a href="/">Home</a>
+        <a href="/settings">Settings</a>
+        <a href="/debug">Debug</a>
+        <a href="/logs">Logs</a>
     </nav>
-
-    <main>
+    <div class="container">
         <h1>Debug Controls</h1>
-        <p class="subtitle">Toggle debug logs for different system components.</p>
-
-        <div class="data-container">
-            <div class="checkbox-container">
-                <label>Fresh Flow</label>
-                <input type="checkbox" id="fresh-flow-debug" onchange="toggleDebug('fresh-flow')">
+        <p>Toggle debug logs for different system components.</p>
+        <div class="debug-controls">
+            <div class="debug-item">
+                <label for="fresh-flow">Fresh Flow</label>
+                <input type="checkbox" id="fresh-flow" data-component="fresh-flow">
             </div>
-
-            <div class="checkbox-container">
-                <label>Feed Flow</label>
-                <input type="checkbox" id="feed-flow-debug" onchange="toggleDebug('feed-flow')">
+            <div class="debug-item">
+                <label for="feed-flow">Feed Flow</label>
+                <input type="checkbox" id="feed-flow" data-component="feed-flow">
             </div>
-
-            <div class="checkbox-container">
-                <label>Drain Flow</label>
-                <input type="checkbox" id="drain-flow-debug" onchange="toggleDebug('drain-flow')">
+            <div class="debug-item">
+                <label for="drain-flow">Drain Flow</label>
+                <input type="checkbox" id="drain-flow" data-component="drain-flow">
             </div>
-
-            <div class="checkbox-container">
-                <label>Socket Connections</label>
-                <input type="checkbox" id="socket-connections-debug" onchange="toggleDebug('socket-connections')">
+            <div class="debug-item">
+                <label for="socket-connections">Socket Connections</label>
+                <input type="checkbox" id="socket-connections" data-component="socket-connections">
             </div>
-
-            <div class="checkbox-container">
-                <label>Plants</label>
-                <input type="checkbox" id="plants-debug" onchange="toggleDebug('plants')">
+            <div class="debug-item">
+                <label for="plants">Plants</label>
+                <input type="checkbox" id="plants" data-component="plants">
             </div>
-
-            <div class="checkbox-container">
-                <label>DNS Resolution</label>
-                <input type="checkbox" id="dns-resolution-debug" onchange="toggleDebug('dns-resolution')">
+            <div class="debug-item">
+                <label for="dns-resolution">DNS Resolution</label>
+                <input type="checkbox" id="dns-resolution" data-component="dns-resolution">
             </div>
-
-            <div class="checkbox-container">
-                <label>Local WebSocket</label>
-                <input type="checkbox" id="local-websocket-debug" onchange="toggleDebug('local-websocket')">
+            <div class="debug-item">
+                <label for="local-websocket">Local WebSocket</label>
+                <input type="checkbox" id="local-websocket" data-component="local-websocket">
             </div>
-
-            <div class="checkbox-container">
-                <label>Notifications</label>
-                <input type="checkbox" id="notifications-debug" onchange="toggleDebug('notifications')">
+            <div class="debug-item">
+                <label for="notifications">Notifications</label>
+                <input type="checkbox" id="notifications" data-component="notifications">
+            </div>
+            <div class="debug-item">
+                <label for="feeding-extended-log">Feeding- Extended Log</label>
+                <input type="checkbox" id="feeding-extended-log" data-component="feeding-extended-log">
             </div>
         </div>
-    </main>
+    </div>
+    <script src="/static/js/debug.js"></script>
 </body>
 </html>
