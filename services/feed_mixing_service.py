@@ -192,6 +192,6 @@ def monitor_feed_mixing(socketio, app):
                 last_processed_plant = plant_ip
             elif phase == 'fill' and plant_ip and not use_feed:
                 log_feeding_feedback(f"Skipping feed mixing for {plant_ip} due to use_feed=False", plant_ip, 'debug', socketio)
-            elif phase == 'fill' and plant_ip and mixing_completed:
-                log_feeding_feedback(f"Skipping feed mixing for {plant_ip} as mixing already completed", plant_ip, 'debug', socketio)
+            #elif phase == 'fill' and plant_ip and mixing_completed:
+                #log_feeding_feedback(f"Skipping feed mixing for {plant_ip} as mixing already completed", plant_ip, 'debug', socketio)
         eventlet.sleep(0.1)  # Longer sleep to reduce race conditions
