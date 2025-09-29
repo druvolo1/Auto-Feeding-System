@@ -8,7 +8,7 @@ SERVICE_PATH = "/etc/systemd/system/feeding.service"
 
 def check_package_manager():
     if distro.id() in ['ubuntu', 'debian']:
-        return ["apt-get", "install", "-y", "--force-confdef", "--force-confold"]
+        return ["apt-get", "install", "-y"]
     else:
         print(f"Unsupported distribution: {distro.id()}. This script requires a Debian/Ubuntu system.")
         sys.exit(1)
