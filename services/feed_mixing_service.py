@@ -26,7 +26,7 @@ def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'
     relay_ports = settings.get('relay_ports', {})
     relay_name = next((name for name, id in relay_ports.items() if id == relay_id), f"relay {relay_id}")
     formatted_name = ' '.join(word.capitalize() for word in relay_name.replace('_', ' ').split()) + " Relay"
-    url = f"http://127.0.0.1:8000/api/valve_relay/{relay_id}/{action}"
+    url = f"http://127.0.0.1:8001/api/valve_relay/{relay_id}/{action}"
     try:
         response = requests.post(url, timeout=5)
         response.raise_for_status()

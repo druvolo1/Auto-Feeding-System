@@ -33,4 +33,4 @@ def flush_avahi():
 
 if __name__ == "__main__":
     print("[WSGI] Running in local development mode (not under Gunicorn).")
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    app.run(host="0.0.0.0", port=8001, debug=True)

@@ -414,4 +414,4 @@ def logs_page():
 if __name__ == "__main__":
     # Resolve host for socketio.run to handle mDNS
     host = standardize_host_ip("0.0.0.0") or "0.0.0.0"
-    socketio.run(app, host=host, port=8000, debug=True)
+    socketio.run(app, host=host, port=8001, debug=True)
