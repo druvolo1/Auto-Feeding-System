@@ -8,6 +8,16 @@ from .feeding_service import log_feeding_feedback, stop_feeding_flag, send_notif
 from .feed_pump_service import control_feed_pump
 import eventlet
 
+def log_extended_feedback(message, plant_ip=None, status='debug', sio=None):
+    """
+    Log extended feedback only if the 'feeding-extended-log' debug option is enabled.
+    Avoids circular import by accessing debug_states locally.
+    """
+    from app import debug_states
+    if debug_states.get('feeding-extended-log', False):
+        from .feeding_service import log_feeding_feedback
+        log_feeding_feedback(message, plant_ip, status, sio)
+
 def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'):
     """
     Control a local relay via the internal API endpoint.
@@ -72,7 +82,7 @@ def monitor_feed_mixing(socketio, app):
                 components_off = False
                 mixing_completed = False
                 last_processed_plant = plant_ip
-                #log_feeding_feedback(f"Reset mixing state for new plant {plant_ip} or phase change to {phase}", plant_ip, 'debug', socketio)
+                log_extended_feedback(f"Reset mixing state for new plant {plant_ip} or phase change to {phase}", plant_ip, 'debug', socketio)
 
             if phase == 'fill' and plant_ip and not mixed and use_feed and not mixing_completed:
                 # Get system_volume from plant data
@@ -191,7 +201,7 @@ def monitor_feed_mixing(socketio, app):
                 mixing_completed = True
                 last_processed_plant = plant_ip
             elif phase == 'fill' and plant_ip and not use_feed:
-                log_feeding_feedback(f"Skipping feed mixing for {plant_ip} due to use_feed=False", plant_ip, 'debug', socketio)
+                log_extended_feedback(f"Skipping feed mixing for {plant_ip} due to use_feed=False", plant_ip, 'debug', socketio)
             #elif phase == 'fill' and plant_ip and mixing_completed:
-                #log_feeding_feedback(f"Skipping feed mixing for {plant_ip} as mixing already completed", plant_ip, 'debug', socketio)
+                log_extended_feedback(f"Skipping feed mixing for {plant_ip} as mixing already completed", plant_ip, 'debug', socketio)
         eventlet.sleep(0.1)  # Longer sleep to reduce race conditions
