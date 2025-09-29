@@ -8,7 +8,7 @@ SERVICE_PATH = "/etc/systemd/system/feeding.service"
 
 def check_package_manager():
     if distro.id() in ['ubuntu', 'debian']:
-        return ["apt-get", "install", "-y"]
+        return ["apt-get", "install", "-y", "--force-confdef", "--force-confold"]
     else:
         print(f"Unsupported distribution: {distro.id()}. This script requires a Debian/Ubuntu system.")
         sys.exit(1)
@@ -59,8 +59,8 @@ WantedBy=multi-user.target
 
     try:
         # 2) Update & upgrade
-        run_command(["apt-get", "update", "-y"], "apt-get update")  # Removed invalid options for update
-        run_command(["apt-get", "upgrade", "-y], "apt-get upgrade")
+        run_command(["apt-get", "update", "-y"], "apt-get update")
+        run_command(["apt-get", "upgrade", "-y"], "apt-get upgrade")  # Removed invalid options
 
         # 3) Install needed packages
         pkg_install = check_package_manager()
