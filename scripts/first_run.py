@@ -31,7 +31,7 @@ def main():
         print("Error: This script must be run with sudo, not as root directly.")
         sys.exit(1)
     home_dir = f"/home/{user}"
-    auto_feed_dir = f"{home_dir}/Auto Feeding System"
+    auto_feed_dir = f"{home_dir}/Auto-Feeding-System"  # Updated to match actual directory name
     venv_dir = f"{auto_feed_dir}/venv"
     requirements_file = f"{auto_feed_dir}/requirements.txt"
 
