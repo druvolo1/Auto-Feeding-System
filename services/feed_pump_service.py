@@ -52,7 +52,7 @@ def control_feed_pump(io_number=None, pump_type='io', state=None, get_status=Fal
             GPIO.output(int(io_number), state)  # Active-high: 1=ON, 0=OFF
             action = 'ON' if state == 1 else 'OFF'
             log_feeding_feedback(f"Feed pump turned {action} on IO {io_number}", plant_ip, 'success', sio)
-            log_feeding_feedback(f"Feed pump turned {action}", plant_ip, 'success', sio)
+            #log_feeding_feedback(f"Feed pump turned {action}", plant_ip, 'success', sio)
             return True
 
         elif pump_type == 'shelly':
