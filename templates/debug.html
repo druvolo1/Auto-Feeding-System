@@ -2,127 +2,87 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Debug - Flow Meter Monitor</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="manifest" href="/static/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug</title>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            fetch('/debug/states')
-                .then(response => response.json())
-                .then(data => {
-                    const freshFlowCheckbox = document.getElementById('fresh-flow-debug');
-                    if (freshFlowCheckbox) freshFlowCheckbox.checked = data['fresh-flow'];
-
-                    const feedFlowCheckbox = document.getElementById('feed-flow-debug');
-                    if (feedFlowCheckbox) feedFlowCheckbox.checked = data['feed-flow'];
-
-                    const drainFlowCheckbox = document.getElementById('drain-flow-debug');
-                    if (drainFlowCheckbox) drainFlowCheckbox.checked = data['drain-flow'];
-
-                    const socketConnectionsCheckbox = document.getElementById('socket-connections-debug');
-                    if (socketConnectionsCheckbox) socketConnectionsCheckbox.checked = data['socket-connections'];
-
-                    const plantsCheckbox = document.getElementById('plants-debug');
-                    if (plantsCheckbox) plantsCheckbox.checked = data['plants'];
-
-                    const dnsResolutionCheckbox = document.getElementById('dns-resolution-debug');
-                    if (dnsResolutionCheckbox) dnsResolutionCheckbox.checked = data['dns-resolution'] || false;
-
-                    const localWebsocketCheckbox = document.getElementById('local-websocket-debug');
-                    if (localWebsocketCheckbox) localWebsocketCheckbox.checked = data['local-websocket'] || false;
-
-                    const notificationsCheckbox = document.getElementById('notifications-debug');
-                    if (notificationsCheckbox) notificationsCheckbox.checked = data['notifications'] || false;
-                })
-                .catch(error => console.error('Error loading debug states:', error));
-        });
-
-        function toggleDebug(component) {
-            const checkbox = document.getElementById(`${component}-debug`);
-            if (!checkbox) {
-                console.error(`Checkbox for ${component} not found`);
-                return;
-            }
-            fetch('/debug/toggle', {
+        async function toggleDebug(component, checkbox) {
+            const response = await fetch('/toggle', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ component: component, enabled: checkbox.checked })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status !== 'success') {
-                        console.error('Failed to toggle debug:', data.error);
-                        checkbox.checked = !checkbox.checked; // Revert on failure
-                    }
-                })
-                .catch(error => {
-                    console.error('Error toggling debug:', error);
-                    checkbox.checked = !checkbox.checked; // Revert on error
-                });
+                body: JSON.stringify({ component, enabled: checkbox.checked })
+            });
+            const result = await response.json();
+            if (result.status !== 'success') {
+                alert('Failed to toggle debug: ' + (result.error || 'Unknown error'));
+                checkbox.checked = !checkbox.checked; // Revert on failure
+            }
         }
     </script>
 </head>
 <body>
     <nav>
-        <ul>
-            <li><a href="/">Home</a></li>
-            <li><a href="/settings">Settings</a></li>
-            <li><a href="/debug" class="active">Debug</a></li>
-            <li><a href="/logs">Logs</a></li>
-        </ul>
+        <a href="/">Home</a>
+        <a href="/settings">Settings</a>
+        <a href="/debug">Debug</a>
+        <a href="/logs">Logs</a>
     </nav>
 
-    <main>
-        <h1>Debug Controls</h1>
-        <p class="subtitle">Toggle debug logs for different system components.</p>
+    <h1>Debug Controls</h1>
+    <p>Toggle debug logs for different system components.</p>
 
-        <div class="data-container">
-            <div class="checkbox-container">
-                <label>Fresh Flow</label>
-                <input type="checkbox" id="fresh-flow-debug" onchange="toggleDebug('fresh-flow')">
-            </div>
-
-            <div class="checkbox-container">
-                <label>Feed Flow</label>
-                <input type="checkbox" id="feed-flow-debug" onchange="toggleDebug('feed-flow')">
-            </div>
-
-            <div class="checkbox-container">
-                <label>Drain Flow</label>
-                <input type="checkbox" id="drain-flow-debug" onchange="toggleDebug('drain-flow')">
-            </div>
-
-            <div class="checkbox-container">
-                <label>Socket Connections</label>
-                <input type="checkbox" id="socket-connections-debug" onchange="toggleDebug('socket-connections')">
-            </div>
-
-            <div class="checkbox-container">
-                <label>Plants</label>
-                <input type="checkbox" id="plants-debug" onchange="toggleDebug('plants')">
-            </div>
-
-            <div class="checkbox-container">
-                <label>DNS Resolution</label>
-                <input type="checkbox" id="dns-resolution-debug" onchange="toggleDebug('dns-resolution')">
-            </div>
-
-            <div class="checkbox-container">
-                <label>Local WebSocket</label>
-                <input type="checkbox" id="local-websocket-debug" onchange="toggleDebug('local-websocket')">
-            </div>
-
-            <div class="checkbox-container">
-                <label>Notifications</label>
-                <input type="checkbox" id="notifications-debug" onchange="toggleDebug('notifications')">
-            </div>
-
-            <div class="checkbox-container">
-                <label>Feeding - Extended Log</label>
-                <input type="checkbox" id="feeding-extended-log" data-component="feeding-extended-log">
-            </div>
-        </div>
-    </main>
+    <div>
+        <label>
+            <input type="checkbox" data-component="fresh-flow" onchange="toggleDebug('fresh-flow', this)">
+            Fresh Flow
+        </label>
+    </div>
+    <div>
+        <label>
+            <input type="checkbox" data-component="feed-flow" onchange="toggleDebug('feed-flow', this)">
+            Feed Flow
+        </label>
+    </div>
+    <div>
+        <label>
+            <input type="checkbox" data-component="drain-flow" onchange="toggleDebug('drain-flow', this)">
+            Drain Flow
+        </label>
+    </div>
+    <div>
+        <label>
+            <input type="checkbox" data-component="socket-connections" onchange="toggleDebug('socket-connections', this)">
+            Socket Connections
+        </label>
+    </div>
+    <div>
+        <label>
+            <input type="checkbox" data-component="plants" onchange="toggleDebug('plants', this)">
+            Plants
+        </label>
+    </div>
+    <div>
+        <label>
+            <input type="checkbox" data-component="dns-resolution" onchange="toggleDebug('dns-resolution', this)">
+            DNS Resolution
+        </label>
+    </div>
+    <div>
+        <label>
+            <input type="checkbox" data-component="local-websocket" onchange="toggleDebug('local-websocket', this)">
+            Local WebSocket
+        </label>
+    </div>
+    <div>
+        <label>
+            <input type="checkbox" data-component="notifications" onchange="toggleDebug('notifications', this)">
+            Notifications
+        </label>
+    </div>
+    <div>
+        <label>
+            <input type="checkbox" data-component="feeding-extended-log" onchange="toggleDebug('feeding-extended-log', this)">
+            Feeding - Extended Log
+        </label>
+    </div>
 </body>
 </html>
