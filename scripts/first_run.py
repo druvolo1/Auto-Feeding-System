@@ -60,7 +60,7 @@ WantedBy=multi-user.target
     try:
         # 2) Update & upgrade
         run_command(["apt-get", "update", "-y"], "apt-get update")  # Removed invalid options for update
-        run_command(["apt-get", "upgrade", "-y", "--force-confdef", "--force-confold"], "apt-get upgrade")
+        run_command(["apt-get", "upgrade", "-y], "apt-get upgrade")
 
         # 3) Install needed packages
         pkg_install = check_package_manager()
