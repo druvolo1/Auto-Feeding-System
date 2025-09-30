@@ -13,20 +13,63 @@ settings_blueprint = Blueprint('settings', __name__)
 @settings_blueprint.route('/update', methods=['POST'])
 def update_application():
     try:
-        # Perform git pull in the current working directory (should be Auto-Feeding-System)
-        git_output = subprocess.check_output(['git', 'pull'], cwd=os.getcwd(), stderr=subprocess.STDOUT).decode('utf-8')
+        # Get the project root (assuming cwd is Auto-Feeding-System)
+        project_root = os.getcwd()
+        venv_pip = os.path.join(project_root, 'venv', 'bin', 'pip')
+        requirements_file = os.path.join(project_root, 'requirements.txt')
+
+        # Step 1: Git pull and capture output
+        git_proc = subprocess.run(['git', 'pull'], cwd=project_root, capture_output=True, text=True, timeout=60)
+        git_output = git_proc.stdout.strip()
+        git_error = git_proc.stderr.strip()
+        if git_proc.returncode != 0:
+            return jsonify({
+                "status": "failure", 
+                "error": f"Git pull failed: {git_error or 'Unknown error'}",
+                "git_output": git_output
+            }), 500
+
+        # Step 2: Dry-run pip install to check for new requirements
+        pip_dry_proc = subprocess.run([venv_pip, 'install', '-r', requirements_file, '--dry-run'], 
+                                      cwd=project_root, capture_output=True, text=True, timeout=60)
+        pip_dry_output = pip_dry_proc.stdout.strip()
+        has_new_requirements = 'Would install' in pip_dry_output or 'Requirement already satisfied' not in pip_dry_output
+
+        # Step 3: Real pip install if requirements exist
+        pip_output = ""
+        if os.path.exists(requirements_file):
+            pip_proc = subprocess.run([venv_pip, 'install', '-r', requirements_file], 
+                                      cwd=project_root, capture_output=True, text=True, timeout=120)
+            pip_output = pip_proc.stdout.strip()
+            pip_error = pip_proc.stderr.strip()
+            if pip_proc.returncode != 0:
+                return jsonify({
+                    "status": "failure", 
+                    "error": f"Pip install failed: {pip_error or 'Unknown error'}",
+                    "git_output": git_output,
+                    "pip_dry_output": pip_dry_output,
+                    "has_new_requirements": has_new_requirements
+                }), 500
+        else:
+            pip_output = "No requirements.txt found - skipping dependency update."
+
+        # Success response with details
+        response_data = {
+            "status": "success", 
+            "message": "Update completed successfully.",
+            "git_output": git_output,
+            "has_new_requirements": has_new_requirements,
+            "pip_dry_output": pip_dry_output[:500] + "..." if len(pip_dry_output) > 500 else pip_dry_output,  # Truncate if too long
+            "pip_output": pip_output[:500] + "..." if len(pip_output) > 500 else pip_output
+        }
         
-        # Update dependencies in the virtual environment
-        venv_pip = os.path.join(os.getcwd(), 'venv', 'bin', 'pip')
-        pip_output = subprocess.check_output([venv_pip, 'install', '-r', 'requirements.txt'], cwd=os.getcwd(), stderr=subprocess.STDOUT).decode('utf-8')
+        # Restart the service in a detached process
+        subprocess.Popen(['sudo', 'systemctl', 'restart', 'feeding.service'], 
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=project_root)
         
-        # Return success response before restarting (the restart will happen after the response is sent)
-        response = jsonify({"status": "success", "message": "Update completed. Restarting service..."})
-        
-        # Restart the service in a detached process to allow the response to be sent first
-        subprocess.Popen(['sudo', 'systemctl', 'restart', 'feeding.service'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=os.getcwd())
-        
-        return response
+        return jsonify(response_data)
+    except subprocess.TimeoutExpired:
+        return jsonify({"status": "failure", "error": "Update timed out (git or pip took too long)"}), 500
     except subprocess.CalledProcessError as e:
         error_output = e.output.decode('utf-8') if e.output else str(e)
         return jsonify({"status": "failure", "error": f"Update failed: {error_output}"}), 500
