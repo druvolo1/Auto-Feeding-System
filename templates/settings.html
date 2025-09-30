@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -425,9 +426,13 @@
                 });
             }
         }
+
         function closeUpdateModal() {
             document.getElementById('update-modal').style.display = 'none';
             document.getElementById('overlay').style.display = 'none';
+            if (document.getElementById('update-title').textContent === 'Update Successful!') {
+                location.reload();
+            }
         }
 
         function loadSettings() {
@@ -514,6 +519,9 @@
                     if (telegramBotToken) telegramBotToken.value = data.telegram_bot_token || '';
                     const telegramChatId = document.getElementById('telegram-chat-id');
                     if (telegramChatId) telegramChatId.value = data.telegram_chat_id || '';
+
+                    const currentVersionEl = document.getElementById('current-version');
+                    if (currentVersionEl) currentVersionEl.textContent = data.current_version || 'Unknown';
                 })
                 .catch(error => console.error('Error loading settings:', error));
         }
@@ -771,12 +779,6 @@
         <p class="subtitle">Configure your flow meter monitor.</p>
 
         <div class="data-container">
-            <h3>Application Update</h3>
-            <button class="small-btn" onclick="updateApplication()">Update Application</button>
-            <p class="tooltip">Pulls the latest changes from GitHub and restarts the service.</p>
-        </div>
-
-        <div class="data-container">
             <h3>Plants to feed</h3>
             <div id="additional-plants-list">
                 <!-- Populated by JS -->
@@ -970,6 +972,14 @@
                 </form>
             </div>
         </div>
+
+        <div class="data-container">
+            <h3>Application Update</h3>
+            <p>Current Version: <span id="current-version">Unknown</span></p>
+            <button class="small-btn" onclick="updateApplication()">Update Application</button>
+            <p class="tooltip">Pulls the latest changes from GitHub and restarts the service.</p>
+        </div>
     </main>
 </body>
 </html>
+```

@@ -8,6 +8,8 @@ import requests  # For sending Discord and Telegram test POSTs
 import subprocess
 import os
 
+CURRENT_VERSION = "v1.0"  # Update this manually before pushing to Git
+
 settings_blueprint = Blueprint('settings', __name__)
 
 @settings_blueprint.route('/update', methods=['POST'])
@@ -87,6 +89,7 @@ def get_settings():
     settings.setdefault('telegram_enabled', False)
     settings.setdefault('telegram_bot_token', '')
     settings.setdefault('telegram_chat_id', '')
+    settings['current_version'] = CURRENT_VERSION
     return jsonify(settings)
 
 @settings_blueprint.route('', methods=['POST'])
