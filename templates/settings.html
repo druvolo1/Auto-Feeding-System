@@ -428,11 +428,17 @@
         }
 
         function closeUpdateModal() {
+            const modal = document.getElementById('update-modal');
+            const overlay = document.getElementById('overlay');
             if (document.getElementById('update-title').textContent === 'Update Successful!') {
-                window.location.reload(true); // Force hard reload bypassing cache
+                modal.style.display = 'none';
+                overlay.style.display = 'none';
+                setTimeout(() => {
+                    window.location.href = window.location.href; // Force reload after modal closes
+                }, 100); // Brief delay to ensure modal hides first
             } else {
-                document.getElementById('update-modal').style.display = 'none';
-                document.getElementById('overlay').style.display = 'none';
+                modal.style.display = 'none';
+                overlay.style.display = 'none';
             }
         }
 
