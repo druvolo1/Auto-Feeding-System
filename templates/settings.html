@@ -373,59 +373,69 @@
             }
         });
 
-        // Enhanced update function with progress feedback
-        function updateApplication() {
-            if (confirm('Are you sure you want to update the application? This will pull the latest changes, update dependencies if needed, and restart the service.')) {
-                const modal = document.getElementById('update-modal');
-                const progress = document.getElementById('update-progress');
-                const title = document.getElementById('update-title');
-                const overlay = document.getElementById('overlay');
-                const closeBtn = document.getElementById('close-modal');
-
-                // Show modal and overlay
-                modal.style.display = 'block';
-                overlay.style.display = 'block';
-                closeBtn.style.display = 'none';
-                title.textContent = 'Pulling latest changes...';
-                progress.textContent = 'Running git pull...\n';
-
-                fetch('/api/settings/update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                })
+        // Function to check for updates
+        function checkForUpdate() {
+            document.getElementById('update-status').innerText = 'Checking...';
+            fetch('/api/settings/check_update')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        // Update progress with results
-                        let feedback = progress.textContent;
-                        feedback += `\n✅ Git Pull Results:\n${data.git_output}\n\n`;
-                        if (data.has_new_requirements) {
-                            feedback += `🔄 New requirements detected and installed:\n${data.pip_output || 'See dry-run below for details'}\n\n`;
+                        if (data.update_available) {
+                            document.getElementById('update-status').innerText = 'Update available';
+                            if (confirm('An update is available. Do you want to apply it?')) {
+                                applyUpdate();
+                            }
                         } else {
-                            feedback += `ℹ️ No new requirements needed.\nDry-run output:\n${data.pip_dry_output}\n\n`;
+                            document.getElementById('update-status').innerText = 'No update available';
                         }
-                        feedback += `🚀 Update complete! Restarting service...\nClick 'Close & Reload' to refresh the page.`;
-                        progress.textContent = feedback;
+                    } else {
+                        document.getElementById('update-status').innerText = 'Error: ' + data.error;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('update-status').innerText = 'Error checking for update';
+                    console.error('Error:', error);
+                });
+        }
 
+        // Function to apply update
+        function applyUpdate() {
+            const modal = document.getElementById('update-modal');
+            const progress = document.getElementById('update-progress');
+            const title = document.getElementById('update-title');
+            const overlay = document.getElementById('overlay');
+            const closeBtn = document.getElementById('close-modal');
+
+            modal.style.display = 'block';
+            overlay.style.display = 'block';
+            closeBtn.style.display = 'none';
+            title.textContent = 'Applying update...';
+            progress.textContent = 'Please wait...';
+
+            fetch('/api/settings/apply_update', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        progress.textContent = 'Update complete. The application will restart.';
                         title.textContent = 'Update Successful!';
                         closeBtn.style.display = 'inline-block';
                         closeBtn.textContent = 'Close & Reload';
                     } else {
-                        progress.textContent += `\n❌ Update failed: ${data.error}\nGit output (if available):\n${data.git_output || 'N/A'}\n`;
+                        progress.textContent = 'Update failed: ' + data.error;
                         title.textContent = 'Update Failed';
                         closeBtn.style.display = 'inline-block';
                         closeBtn.textContent = 'Close';
                     }
                 })
                 .catch(error => {
-                    progress.textContent += `\n❌ Network error during update: ${error}\n`;
+                    progress.textContent = 'Error applying update: ' + error;
                     title.textContent = 'Update Error';
                     closeBtn.style.display = 'inline-block';
                     closeBtn.textContent = 'Close';
                 });
-            }
         }
 
+        // Function to close modal
         function closeUpdateModal() {
             const modal = document.getElementById('update-modal');
             const overlay = document.getElementById('overlay');
@@ -476,8 +486,8 @@
                     const nutrientConcEl = document.getElementById('nutrient-conc');
                     if (nutrientConcEl) nutrientConcEl.value = data.nutrient_concentration || 1;
 
-                    data.usb_roles = data.usb_roles || {};
-                    populateUsbDevices(data.usb_roles.valve_relay);
+                    const usbRoles = data.usb_roles || {};
+                    populateUsbDevices(usbRoles.valve_relay);
 
                     loadRelayStatuses();
 
@@ -665,7 +675,7 @@
         }
 
         function turnOnRelay(relayId) {
-            fetch(`/api/valve_relay/${relayId}/on`, {
+            fetch(`/api/valve_relay/${relayId}/on`, { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -681,7 +691,7 @@
         }
 
         function turnOffRelay(relayId) {
-            fetch(`/api/valve_relay/${relayId}/off`, {
+            fetch(`/api/valve_relay/${relayId}/off`, { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -982,10 +992,9 @@
         <div class="data-container">
             <h3>Application Update</h3>
             <p>Current Version: <span id="current-version">Unknown</span></p>
-            <button class="small-btn" onclick="updateApplication()">Update Application</button>
-            <p class="tooltip">Pulls the latest changes from GitHub and restarts the service.</p>
+            <button class="small-btn" onclick="checkForUpdate()">Check for Update</button>
+            <p id="update-status"></p>
         </div>
     </main>
 </body>
 </html>
-```

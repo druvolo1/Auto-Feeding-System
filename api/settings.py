@@ -12,71 +12,60 @@ CURRENT_VERSION = "v1.1"  # Update this manually before pushing to Git
 
 settings_blueprint = Blueprint('settings', __name__)
 
-@settings_blueprint.route('/update', methods=['POST'])
-def update_application():
+@settings_blueprint.route('/check_update', methods=['GET'])
+def check_update():
     try:
-        # Get the project root (assuming cwd is Auto-Feeding-System)
+        project_root = os.getcwd()
+        # Git fetch to update remote refs
+        fetch_proc = subprocess.run(['git', 'fetch'], cwd=project_root, capture_output=True, text=True, timeout=30)
+        if fetch_proc.returncode != 0:
+            return jsonify({"status": "failure", "error": "Failed to fetch updates"}), 500
+
+        # Check status
+        status_proc = subprocess.run(['git', 'status', '-uno'], cwd=project_root, capture_output=True, text=True, timeout=30)
+        git_status = status_proc.stdout.strip()
+        if 'Your branch is behind' in git_status:
+            return jsonify({"status": "success", "update_available": True, "message": "Update available"})
+        else:
+            return jsonify({"status": "success", "update_available": False, "message": "No update available"})
+    except subprocess.TimeoutExpired:
+        return jsonify({"status": "failure", "error": "Check timed out"}), 500
+    except Exception as e:
+        return jsonify({"status": "failure", "error": f"Unexpected error: {str(e)}"}), 500
+
+@settings_blueprint.route('/apply_update', methods=['POST'])
+def apply_update():
+    try:
         project_root = os.getcwd()
         venv_pip = os.path.join(project_root, 'venv', 'bin', 'pip')
         requirements_file = os.path.join(project_root, 'requirements.txt')
 
-        # Step 1: Git pull and capture output
+        # Git pull
         git_proc = subprocess.run(['git', 'pull'], cwd=project_root, capture_output=True, text=True, timeout=60)
-        git_output = git_proc.stdout.strip()
-        git_error = git_proc.stderr.strip()
         if git_proc.returncode != 0:
-            return jsonify({
-                "status": "failure", 
-                "error": f"Git pull failed: {git_error or 'Unknown error'}",
-                "git_output": git_output
-            }), 500
+            return jsonify({"status": "failure", "error": "Failed to apply updates"}), 500
 
-        # Step 2: Dry-run pip install to check for new requirements
-        pip_dry_proc = subprocess.run([venv_pip, 'install', '-r', requirements_file, '--dry-run'], 
-                                      cwd=project_root, capture_output=True, text=True, timeout=60)
-        pip_dry_output = pip_dry_proc.stdout.strip()
-        has_new_requirements = 'Would install' in pip_dry_output or 'Requirement already satisfied' not in pip_dry_output
-
-        # Step 3: Real pip install if requirements exist
-        pip_output = ""
+        # Pip install if requirements exist
         if os.path.exists(requirements_file):
             pip_proc = subprocess.run([venv_pip, 'install', '-r', requirements_file], 
                                       cwd=project_root, capture_output=True, text=True, timeout=120)
-            pip_output = pip_proc.stdout.strip()
-            pip_error = pip_proc.stderr.strip()
             if pip_proc.returncode != 0:
-                return jsonify({
-                    "status": "failure", 
-                    "error": f"Pip install failed: {pip_error or 'Unknown error'}",
-                    "git_output": git_output,
-                    "pip_dry_output": pip_dry_output,
-                    "has_new_requirements": has_new_requirements
-                }), 500
-        else:
-            pip_output = "No requirements.txt found - skipping dependency update."
+                return jsonify({"status": "failure", "error": "Failed to install dependencies"}), 500
 
-        # Success response with details
-        response_data = {
-            "status": "success", 
-            "message": "Update completed successfully.",
-            "git_output": git_output,
-            "has_new_requirements": has_new_requirements,
-            "pip_dry_output": pip_dry_output[:500] + "..." if len(pip_dry_output) > 500 else pip_dry_output,  # Truncate if too long
-            "pip_output": pip_output[:500] + "..." if len(pip_output) > 500 else pip_output
-        }
-        
-        # Restart the service in a detached process
+        # Restart the service
         subprocess.Popen(['sudo', 'systemctl', 'restart', 'feeding.service'], 
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=project_root)
         
-        return jsonify(response_data)
+        return jsonify({"status": "success", "message": "Update complete"})
     except subprocess.TimeoutExpired:
-        return jsonify({"status": "failure", "error": "Update timed out (git or pip took too long)"}), 500
-    except subprocess.CalledProcessError as e:
-        error_output = e.output.decode('utf-8') if e.output else str(e)
-        return jsonify({"status": "failure", "error": f"Update failed: {error_output}"}), 500
+        return jsonify({"status": "failure", "error": "Update timed out"}), 500
     except Exception as e:
         return jsonify({"status": "failure", "error": f"Unexpected error: {str(e)}"}), 500
+
+@settings_blueprint.route('/update', methods=['POST'])
+def update_application():
+    # Deprecated: Redirect to new endpoints
+    return jsonify({"status": "failure", "error": "Use /check_update and /apply_update instead"}), 410
 
 @settings_blueprint.route('', methods=['GET'])
 def get_settings():
