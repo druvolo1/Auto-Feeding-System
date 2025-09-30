@@ -5,8 +5,33 @@ import api.drain_flow
 from services.valve_relay_service import reinitialize_relay_service
 from utils.settings_utils import load_settings, save_settings
 import requests  # For sending Discord and Telegram test POSTs
+import subprocess
+import os
 
 settings_blueprint = Blueprint('settings', __name__)
+
+@settings_blueprint.route('/update', methods=['POST'])
+def update_application():
+    try:
+        # Perform git pull in the current working directory (should be Auto-Feeding-System)
+        git_output = subprocess.check_output(['git', 'pull'], cwd=os.getcwd(), stderr=subprocess.STDOUT).decode('utf-8')
+        
+        # Update dependencies in the virtual environment
+        venv_pip = os.path.join(os.getcwd(), 'venv', 'bin', 'pip')
+        pip_output = subprocess.check_output([venv_pip, 'install', '-r', 'requirements.txt'], cwd=os.getcwd(), stderr=subprocess.STDOUT).decode('utf-8')
+        
+        # Return success response before restarting (the restart will happen after the response is sent)
+        response = jsonify({"status": "success", "message": "Update completed. Restarting service..."})
+        
+        # Restart the service in a detached process to allow the response to be sent first
+        subprocess.Popen(['sudo', 'systemctl', 'restart', 'feeding.service'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=os.getcwd())
+        
+        return response
+    except subprocess.CalledProcessError as e:
+        error_output = e.output.decode('utf-8') if e.output else str(e)
+        return jsonify({"status": "failure", "error": f"Update failed: {error_output}"}), 500
+    except Exception as e:
+        return jsonify({"status": "failure", "error": f"Unexpected error: {str(e)}"}), 500
 
 @settings_blueprint.route('', methods=['GET'])
 def get_settings():

@@ -70,616 +70,600 @@
         }
     </style>
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        loadSettings();
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
 
-        // Handle USB assignment form submit
-        const valveForm = document.getElementById('valve-relay-form');
-        if (valveForm) {
-            valveForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const device = document.getElementById('valve-relay-device')?.value;
-                if (device) {
-                    saveUsbAssignment('valve_relay', device);
-                } else {
-                    alert('Please select a device.');
-                }
-            });
-        }
-
-        // Handle relay ports form submit
-        const relayPortForm = document.getElementById('relay-port-form');
-        if (relayPortForm) {
-            relayPortForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const feedPort = parseInt(document.getElementById('feed-water-relay-port')?.value, 10);
-                const freshPort = parseInt(document.getElementById('fresh-water-relay-port')?.value, 10);
-                if (!isNaN(feedPort) && !isNaN(freshPort)) {
-                    fetch('/api/settings', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ relay_ports: { feed_water: feedPort, fresh_water: freshPort } })
-                    })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === 'success') {
-                                alert('Relay ports saved successfully.');
-                                loadSettings();
-                            } else {
-                                alert('Failed to save relay ports: ' + data.error);
-                            }
-                        })
-                        .catch(error => console.error('Error saving relay ports:', error));
-                } else {
-                    alert('Please select valid ports.');
-                }
-            });
-        }
-
-        // Handle feed pump form submit
-        const feedPumpForm = document.getElementById('feed-pump-form');
-        if (feedPumpForm) {
-            feedPumpForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const ip = document.getElementById('feed-pump-ip')?.value.trim();
-                const ioNumber = document.getElementById('feed-pump-io-number')?.value.trim();
-                const isIO = document.getElementById('feed-pump-io')?.checked;
-                const isShelly = document.getElementById('feed-pump-shelly')?.checked;
-
-                if (isIO && ioNumber) {
-                    fetch('/api/settings', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ feed_pump: { io_number: ioNumber, type: 'io' } })
-                    })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === 'success') {
-                                alert('Feed pump settings saved successfully.');
-                                loadSettings();
-                            } else {
-                                alert('Failed to save feed pump settings: ' + data.error);
-                            }
-                        })
-                        .catch(error => console.error('Error saving feed pump settings:', error));
-                } else if (isShelly && ip) {
-                    fetch('/api/settings', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ feed_pump: { ip: ip, type: 'shelly' } })
-                    })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === 'success') {
-                                alert('Feed pump settings saved successfully.');
-                                loadSettings();
-                            } else {
-                                alert('Failed to save feed pump settings: ' + data.error);
-                            }
-                        })
-                        .catch(error => console.error('Error saving feed pump settings:', error));
-                } else {
-                    alert('Please select a mode and provide a valid IO number or IP address.');
-                }
-            });
-        }
-
-        // Handle feed pump mode toggle
-        const ioRadio = document.getElementById('feed-pump-io');
-        const shellyRadio = document.getElementById('feed-pump-shelly');
-        const ipInput = document.getElementById('feed-pump-ip');
-        const ioNumberInput = document.getElementById('feed-pump-io-number');
-        if (ioRadio && shellyRadio && ipInput && ioNumberInput) {
-            ioRadio.addEventListener('change', function() {
-                if (ioRadio.checked) {
-                    ipInput.disabled = true;
-                    ipInput.value = '';
-                    ioNumberInput.disabled = false;
-                }
-            });
-            shellyRadio.addEventListener('change', function() {
-                if (shellyRadio.checked) {
-                    ioNumberInput.disabled = true;
-                    ioNumberInput.value = '';
-                    ipInput.disabled = false;
-                }
-            });
-        }
-
-        // Handle feed pump on/off buttons with debounce
-        let lastClickTime = 0;
-        const debounceTime = 500;
-
-        const feedPumpOnButton = document.getElementById('feed-pump-on');
-        if (feedPumpOnButton) {
-            feedPumpOnButton.addEventListener('click', function(e) {
-                const now = Date.now();
-                if (now - lastClickTime < debounceTime) return;
-                lastClickTime = now;
-                turnOnFeedPump();
-            });
-        }
-
-        const feedPumpOffButton = document.getElementById('feed-pump-off');
-        if (feedPumpOffButton) {
-            feedPumpOffButton.addEventListener('click', function(e) {
-                const now = Date.now();
-                if (now - lastClickTime < debounceTime) return;
-                lastClickTime = now;
-                turnOffFeedPump();
-            });
-        }
-
-        // Handle drain flow settings form submit
-        const drainFlowForm = document.getElementById('drain-flow-form');
-        if (drainFlowForm) {
-            drainFlowForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const activationFlow = parseFloat(document.getElementById('activation-flow-rate')?.value);
-                const minFlow = parseFloat(document.getElementById('min-flow-rate')?.value);
-                const activationDelay = parseInt(document.getElementById('activation-delay')?.value, 10);
-                const minFlowCheckDelay = parseInt(document.getElementById('min-flow-check-delay')?.value, 10);
-                const maxDrainTime = parseInt(document.getElementById('max-drain-time')?.value, 10);
-
-                if (isNaN(activationFlow) || isNaN(minFlow) || isNaN(activationDelay) || isNaN(minFlowCheckDelay) || isNaN(maxDrainTime)) {
-                    alert('Please enter valid numbers for all drain flow settings.');
-                    return;
-                }
-                if (minFlow >= activationFlow) {
-                    alert('Minimum flow rate must be less than activation flow rate.');
-                    return;
-                }
-                if (maxDrainTime <= 0) {
-                    alert('Max drain time must be greater than 0.');
-                    return;
-                }
-
-                fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        drain_flow_settings: {
-                            activation_flow_rate: activationFlow,
-                            min_flow_rate: minFlow,
-                            activation_delay: activationDelay,
-                            min_flow_check_delay: minFlowCheckDelay,
-                            max_drain_time: maxDrainTime
-                        }
-                    })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Drain flow settings saved successfully.');
-                            loadSettings();
-                        } else {
-                            alert('Failed to save drain flow settings: ' + data.error);
-                        }
-                    })
-                    .catch(error => console.error('Error saving drain flow settings:', error));
-            });
-        }
-
-        // Handle Discord settings form submit
-        const discordForm = document.getElementById('discord-form');
-        if (discordForm) {
-            discordForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const discordEnabled = document.getElementById('discord-enabled')?.checked;
-                const discordWebhookUrl = document.getElementById('discord-webhook-url')?.value.trim();
-                fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        discord_enabled: discordEnabled,
-                        discord_webhook_url: discordWebhookUrl
-                    })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Discord settings saved successfully.');
-                            loadSettings();
-                        } else {
-                            alert('Failed to save Discord settings: ' + data.error);
-                        }
-                    })
-                    .catch(error => console.error('Error saving Discord settings:', error));
-            });
-        }
-
-        // Handle Discord test message
-        const discordTestForm = document.getElementById('discord-test-form');
-        if (discordTestForm) {
-            discordTestForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const testMessage = document.getElementById('discord-test-message')?.value.trim();
-                if (!testMessage) {
-                    alert('Please enter a test message.');
-                    return;
-                }
-                fetch('/api/settings/discord_message', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ test_message: testMessage })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Test Discord message sent successfully: ' + data.info);
-                        } else {
-                            alert('Failed to send test Discord message: ' + data.error);
-                        }
-                    })
-                    .catch(error => console.error('Error sending test Discord message:', error));
-            });
-        }
-
-        // Handle Telegram settings form submit
-        const telegramForm = document.getElementById('telegram-form');
-        if (telegramForm) {
-            telegramForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const telegramEnabled = document.getElementById('telegram-enabled')?.checked;
-                const telegramBotToken = document.getElementById('telegram-bot-token')?.value.trim();
-                const telegramChatId = document.getElementById('telegram-chat-id')?.value.trim();
-                fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        telegram_enabled: telegramEnabled,
-                        telegram_bot_token: telegramBotToken,
-                        telegram_chat_id: telegramChatId
-                    })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Telegram settings saved successfully.');
-                            loadSettings();
-                        } else {
-                            alert('Failed to save Telegram settings: ' + data.error);
-                        }
-                    })
-                    .catch(error => console.error('Error saving Telegram settings:', error));
-            });
-        }
-
-        // Handle Telegram test message
-        const telegramTestForm = document.getElementById('telegram-test-form');
-        if (telegramTestForm) {
-            telegramTestForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const testMessage = document.getElementById('telegram-test-message')?.value.trim();
-                if (!testMessage) {
-                    alert('Please enter a test message.');
-                    return;
-                }
-                fetch('/api/settings/telegram_message', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ test_message: testMessage })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Test Telegram message sent successfully: ' + data.info);
-                        } else {
-                            alert('Failed to send test Telegram message: ' + data.error);
-                        }
-                    })
-                    .catch(error => console.error('Error sending test Telegram message:', error));
-            });
-        }
-    });
-
-    function loadSettings() {
-        fetch('/api/settings')
-            .then(response => response.json())
-            .then(data => {
-                const plantsList = document.getElementById('additional-plants-list');
-                if (plantsList) {
-                    plantsList.innerHTML = '';
-                    data.additional_plants.forEach((plant, index) => {
-                        const div = document.createElement('div');
-                        div.className = 'valve-rename-cell';
-                        div.innerHTML = `
-                            <input type="text" value="${plant}" disabled>
-                            <button class="small-btn secondary-btn" onclick="removePlant(${index})">Remove</button>
-                        `;
-                        plantsList.appendChild(div);
-                    });
-                }
-
-                data.calibration_factors = data.calibration_factors || {};
-                const freshCal = document.getElementById('fresh-cal');
-                if (freshCal) freshCal.value = data.calibration_factors.fresh || 28.390575;
-                const feedCal = document.getElementById('feed-cal');
-                if (feedCal) feedCal.value = data.calibration_factors.feed || 28.390575;
-                const drainCal = document.getElementById('drain-cal');
-                if (drainCal) drainCal.value = data.calibration_factors.drain || 28.390575;
-
-                const relayPorts = data.relay_ports || { feed_water: 1, fresh_water: 2 };
-                const feedPortEl = document.getElementById('feed-water-relay-port');
-                if (feedPortEl) feedPortEl.value = relayPorts.feed_water;
-                const freshPortEl = document.getElementById('fresh-water-relay-port');
-                if (freshPortEl) freshPortEl.value = relayPorts.fresh_water;
-
-                const nutrientConcEl = document.getElementById('nutrient-conc');
-                if (nutrientConcEl) nutrientConcEl.value = data.nutrient_concentration || 1;
-
-                data.usb_roles = data.usb_roles || {};
-                populateUsbDevices(data.usb_roles.valve_relay);
-
-                loadRelayStatuses();
-
-                const feedPumpIp = document.getElementById('feed-pump-ip');
-                const feedPumpIoNumber = document.getElementById('feed-pump-io-number');
-                const feedPumpIo = document.getElementById('feed-pump-io');
-                const feedPumpShelly = document.getElementById('feed-pump-shelly');
-                if (feedPumpIp && feedPumpIoNumber && feedPumpIo && feedPumpShelly) {
-                    const feedPump = data.feed_pump || {};
-                    feedPumpIp.value = feedPump.ip || '';
-                    feedPumpIoNumber.value = feedPump.io_number || '';
-                    feedPumpIo.checked = feedPump.type === 'io';
-                    feedPumpShelly.checked = feedPump.type === 'shelly';
-                    if (feedPumpIo.checked) {
-                        feedPumpIp.disabled = true;
-                        feedPumpIoNumber.disabled = false;
-                    } else if (feedPumpShelly.checked) {
-                        feedPumpIoNumber.disabled = true;
-                        feedPumpIp.disabled = false;
+            // Handle USB assignment form submit
+            const valveForm = document.getElementById('valve-relay-form');
+            if (valveForm) {
+                valveForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const device = document.getElementById('valve-relay-device')?.value;
+                    if (device) {
+                        saveUsbAssignment('valve_relay', device);
                     } else {
-                        feedPumpIp.disabled = true;
-                        feedPumpIoNumber.disabled = true;
+                        alert('Please select a device.');
                     }
-                }
+                });
+            }
 
-                const drainFlowSettings = data.drain_flow_settings || {};
-                const activationFlow = document.getElementById('activation-flow-rate');
-                if (activationFlow) activationFlow.value = drainFlowSettings.activation_flow_rate !== undefined ? drainFlowSettings.activation_flow_rate : 0.2;
-                const minFlow = document.getElementById('min-flow-rate');
-                if (minFlow) minFlow.value = drainFlowSettings.min_flow_rate !== undefined ? drainFlowSettings.min_flow_rate : 0.05;
-                const activationDelay = document.getElementById('activation-delay');
-                if (activationDelay) activationDelay.value = drainFlowSettings.activation_delay !== undefined ? drainFlowSettings.activation_delay : 5;
-                const minFlowCheckDelay = document.getElementById('min-flow-check-delay');
-                if (minFlowCheckDelay) minFlowCheckDelay.value = drainFlowSettings.min_flow_check_delay !== undefined ? drainFlowSettings.min_flow_check_delay : 30;
-                const maxDrainTime = document.getElementById('max-drain-time');
-                if (maxDrainTime) maxDrainTime.value = drainFlowSettings.max_drain_time !== undefined ? drainFlowSettings.max_drain_time : 600;
+            // Handle relay ports form submit
+            const relayPortForm = document.getElementById('relay-port-form');
+            if (relayPortForm) {
+                relayPortForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const feedPort = parseInt(document.getElementById('feed-water-relay-port')?.value, 10);
+                    const freshPort = parseInt(document.getElementById('fresh-water-relay-port')?.value, 10);
+                    if (!isNaN(feedPort) && !isNaN(freshPort)) {
+                        fetch('/api/settings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ relay_ports: { feed_water: feedPort, fresh_water: freshPort } })
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.status === 'success') {
+                                    alert('Relay ports saved successfully.');
+                                    loadSettings();
+                                } else {
+                                    alert('Failed to save relay ports: ' + data.error);
+                                }
+                            })
+                            .catch(error => console.error('Error saving relay ports:', error));
+                    } else {
+                        alert('Please select valid ports.');
+                    }
+                });
+            }
 
-                const discordEnabled = document.getElementById('discord-enabled');
-                if (discordEnabled) discordEnabled.checked = data.discord_enabled || false;
-                const discordWebhookUrl = document.getElementById('discord-webhook-url');
-                if (discordWebhookUrl) discordWebhookUrl.value = data.discord_webhook_url || '';
-                const telegramEnabled = document.getElementById('telegram-enabled');
-                if (telegramEnabled) telegramEnabled.checked = data.telegram_enabled || false;
-                const telegramBotToken = document.getElementById('telegram-bot-token');
-                if (telegramBotToken) telegramBotToken.value = data.telegram_bot_token || '';
-                const telegramChatId = document.getElementById('telegram-chat-id');
-                if (telegramChatId) telegramChatId.value = data.telegram_chat_id || '';
-            })
-            .catch(error => console.error('Error loading settings:', error));
-    }
+            // Handle feed pump form submit
+            const feedPumpForm = document.getElementById('feed-pump-form');
+            if (feedPumpForm) {
+                feedPumpForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const ip = document.getElementById('feed-pump-ip')?.value.trim();
+                    const ioNumber = document.getElementById('feed-pump-io-number')?.value.trim();
+                    const isIO = document.getElementById('feed-pump-io')?.checked;
+                    const isShelly = document.getElementById('feed-pump-shelly')?.checked;
 
-    function populateUsbDevices(currentDevice) {
-        fetch('/api/settings/usb_devices')
-            .then(response => response.json())
-            .then(devices => {
-                const valveDevSelect = document.getElementById('valve-relay-device');
-                if (valveDevSelect) {
-                    valveDevSelect.innerHTML = '<option value="">Select a device</option>';
-                    devices.forEach(dev => {
-                        const option = document.createElement('option');
-                        option.value = dev.device;
-                        option.textContent = dev.device;
-                        if (option.value === currentDevice) {
-                            option.selected = true;
-                        }
-                        valveDevSelect.appendChild(option);
-                    });
-                }
-            })
-            .catch(error => console.error('Error fetching USB devices:', error));
-    }
+                    if (isIO && ioNumber) {
+                        fetch('/api/settings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ feed_pump: { io_number: ioNumber, type: 'io' } })
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.status === 'success') {
+                                    alert('Feed pump settings saved successfully.');
+                                    loadSettings();
+                                } else {
+                                    alert('Failed to save feed pump settings: ' + data.error);
+                                }
+                            })
+                            .catch(error => console.error('Error saving feed pump settings:', error));
+                    } else if (isShelly && ip) {
+                        fetch('/api/settings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ feed_pump: { ip: ip, type: 'shelly' } })
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.status === 'success') {
+                                    alert('Feed pump settings saved successfully.');
+                                    loadSettings();
+                                } else {
+                                    alert('Failed to save feed pump settings: ' + data.error);
+                                }
+                            })
+                            .catch(error => console.error('Error saving feed pump settings:', error));
+                    } else {
+                        alert('Please select a mode and provide a valid IO number or IP address.');
+                    }
+                });
+            }
 
-    function addAdditionalPlant() {
-        const newIp = document.getElementById('new-plant-ip')?.value.trim();
-        if (!newIp) {
-            alert('Please enter a valid IP or DNS.');
-            return;
-        }
+            // Handle feed pump mode toggle
+            const ioRadio = document.getElementById('feed-pump-io');
+            const shellyRadio = document.getElementById('feed-pump-shelly');
+            const ipInput = document.getElementById('feed-pump-ip');
+            const ioNumberInput = document.getElementById('feed-pump-io-number');
+            if (ioRadio && shellyRadio && ipInput && ioNumberInput) {
+                ioRadio.addEventListener('change', function() {
+                    if (ioRadio.checked) {
+                        ipInput.disabled = true;
+                        ipInput.value = '';
+                        ioNumberInput.disabled = false;
+                    }
+                });
+                shellyRadio.addEventListener('change', function() {
+                    if (shellyRadio.checked) {
+                        ioNumberInput.disabled = true;
+                        ioNumberInput.value = '';
+                        ipInput.disabled = false;
+                    }
+                });
+            }
 
-        fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ additional_plants: [newIp] })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    document.getElementById('new-plant-ip').value = '';
-                    loadSettings();
-                } else {
-                    alert('Failed to add plant: ' + data.error);
-                }
-            })
-            .catch(error => console.error('Error adding plant:', error));
-    }
+            // Handle feed pump on/off buttons with debounce
+            let lastClickTime = 0;
+            const debounceTime = 500;
 
-    function removePlant(index) {
-        fetch('/api/settings/remove_plant', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ index: index })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    loadSettings();
-                } else {
-                    alert('Failed to remove plant: ' + data.error);
-                }
-            })
-            .catch(error => console.error('Error removing plant:', error));
-    }
+            const feedPumpOnButton = document.getElementById('feed-pump-on');
+            if (feedPumpOnButton) {
+                feedPumpOnButton.addEventListener('click', function(e) {
+                    const now = Date.now();
+                    if (now - lastClickTime < debounceTime) return;
+                    lastClickTime = now;
+                    turnOnFeedPump();
+                });
+            }
 
-    function saveCalibrationFactors() {
-        const fresh = parseFloat(document.getElementById('fresh-cal')?.value);
-        const feed = parseFloat(document.getElementById('feed-cal')?.value);
-        const drain = parseFloat(document.getElementById('drain-cal')?.value);
+            const feedPumpOffButton = document.getElementById('feed-pump-off');
+            if (feedPumpOffButton) {
+                feedPumpOffButton.addEventListener('click', function(e) {
+                    const now = Date.now();
+                    if (now - lastClickTime < debounceTime) return;
+                    lastClickTime = now;
+                    turnOffFeedPump();
+                });
+            }
 
-        if (isNaN(fresh) || isNaN(feed) || isNaN(drain)) {
-            alert('Please enter valid numbers for all calibration factors.');
-            return;
-        }
+            // Handle drain flow settings form submit
+            const drainFlowForm = document.getElementById('drain-flow-form');
+            if (drainFlowForm) {
+                drainFlowForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const activationFlow = parseFloat(document.getElementById('activation-flow-rate')?.value);
+                    const minFlow = parseFloat(document.getElementById('min-flow-rate')?.value);
+                    const activationDelay = parseInt(document.getElementById('activation-delay')?.value, 10);
+                    const minFlowCheckDelay = parseInt(document.getElementById('min-flow-check-delay')?.value, 10);
+                    const maxDrainTime = parseInt(document.getElementById('max-drain-time')?.value, 10);
 
-        fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ calibration_factors: { fresh, feed, drain } })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert('Calibration factors saved successfully.');
-                    loadSettings();
-                } else {
-                    alert('Failed to save calibration factors: ' + data.error);
-                }
-            })
-            .catch(error => console.error('Error saving calibration factors:', error));
-    }
+                    if (isNaN(activationFlow) || isNaN(minFlow) || isNaN(activationDelay) || isNaN(minFlowCheckDelay) || isNaN(maxDrainTime)) {
+                        alert('Please enter valid numbers for all drain flow settings.');
+                        return;
+                    }
+                    if (minFlow >= activationFlow) {
+                        alert('Minimum flow rate must be less than activation flow rate.');
+                        return;
+                    }
+                    if (maxDrainTime <= 0) {
+                        alert('Max drain time must be greater than 0.');
+                        return;
+                    }
 
-    function saveNutrientConcentration() {
-        const concentration = parseFloat(document.getElementById('nutrient-conc')?.value);
+                    fetch('/api/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            drain_flow_settings: {
+                                activation_flow_rate: activationFlow,
+                                min_flow_rate: minFlow,
+                                activation_delay: activationDelay,
+                                min_flow_check_delay: minFlowCheckDelay,
+                                max_drain_time: maxDrainTime
+                            }
+                        })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert('Drain flow settings saved successfully.');
+                                loadSettings();
+                            } else {
+                                alert('Failed to save drain flow settings: ' + data.error);
+                            }
+                        })
+                        .catch(error => console.error('Error saving drain flow settings:', error));
+                });
+            }
 
-        if (isNaN(concentration)) {
-            alert('Please enter a valid number for nutrient concentration.');
-            return;
-        }
+            // Handle Discord settings form submit
+            const discordForm = document.getElementById('discord-form');
+            if (discordForm) {
+                discordForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const discordEnabled = document.getElementById('discord-enabled')?.checked;
+                    const discordWebhookUrl = document.getElementById('discord-webhook-url')?.value.trim();
+                    fetch('/api/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            discord_enabled: discordEnabled,
+                            discord_webhook_url: discordWebhookUrl
+                        })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert('Discord settings saved successfully.');
+                                loadSettings();
+                            } else {
+                                alert('Failed to save Discord settings: ' + data.error);
+                            }
+                        })
+                        .catch(error => console.error('Error saving Discord settings:', error));
+                });
+            }
 
-        fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nutrient_concentration: concentration })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert('Nutrient concentration saved successfully.');
-                    loadSettings();
-                } else {
-                    alert('Failed to save nutrient concentration: ' + data.error);
-                }
-            })
-            .catch(error => console.error('Error saving nutrient concentration:', error));
-    }
+            // Handle Discord test message
+            const discordTestForm = document.getElementById('discord-test-form');
+            if (discordTestForm) {
+                discordTestForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const testMessage = document.getElementById('discord-test-message')?.value.trim();
+                    if (!testMessage) {
+                        alert('Please enter a test message.');
+                        return;
+                    }
+                    fetch('/api/settings/discord_message', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ test_message: testMessage })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert('Test Discord message sent successfully: ' + data.info);
+                            } else {
+                                alert('Failed to send test Discord message: ' + data.error);
+                            }
+                        })
+                        .catch(error => console.error('Error sending test Discord message:', error));
+                });
+            }
 
-    function saveUsbAssignment(role, device) {
-        fetch("/api/settings/assign_usb", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ role, device })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert(`${role} assigned successfully.`);
-                    loadSettings();
-                } else {
-                    alert(`Failed to assign ${role}: ${data.error}`);
-                }
-            })
-            .catch(error => console.error(`Error assigning ${role}:`, error));
-    }
+            // Handle Telegram settings form submit
+            const telegramForm = document.getElementById('telegram-form');
+            if (telegramForm) {
+                telegramForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const telegramEnabled = document.getElementById('telegram-enabled')?.checked;
+                    const telegramBotToken = document.getElementById('telegram-bot-token')?.value.trim();
+                    const telegramChatId = document.getElementById('telegram-chat-id')?.value.trim();
+                    fetch('/api/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            telegram_enabled: telegramEnabled,
+                            telegram_bot_token: telegramBotToken,
+                            telegram_chat_id: telegramChatId
+                        })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert('Telegram settings saved successfully.');
+                                loadSettings();
+                            } else {
+                                alert('Failed to save Telegram settings: ' + data.error);
+                            }
+                        })
+                        .catch(error => console.error('Error saving Telegram settings:', error));
+                });
+            }
 
-    function turnOnRelay(relayId) {
-        fetch(`/api/valve_relay/${relayId}/on`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    updateRelayButton(relayId, 'on');
-                } else {
-                    console.error(`Failed to turn on relay ${relayId}: ${data.error}`);
-                }
-            })
-            .catch(error => console.error(`Error turning on relay ${relayId}:`, error));
-    }
+            // Handle Telegram test message
+            const telegramTestForm = document.getElementById('telegram-test-form');
+            if (telegramTestForm) {
+                telegramTestForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const testMessage = document.getElementById('telegram-test-message')?.value.trim();
+                    if (!testMessage) {
+                        alert('Please enter a test message.');
+                        return;
+                    }
+                    fetch('/api/settings/telegram_message', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ test_message: testMessage })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert('Test Telegram message sent successfully: ' + data.info);
+                            } else {
+                                alert('Failed to send test Telegram message: ' + data.error);
+                            }
+                        })
+                        .catch(error => console.error('Error sending test Telegram message:', error));
+                });
+            }
+        });
 
-    function turnOffRelay(relayId) {
-        fetch(`/api/valve_relay/${relayId}/off`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    updateRelayButton(relayId, 'off');
-                } else {
-                    console.error(`Failed to turn off relay ${relayId}: ${data.error}`);
-                }
-            })
-            .catch(error => console.error(`Error turning off relay ${relayId}:`, error));
-    }
-
-    function loadRelayStatuses() {
-        [1, 2].forEach(relayId => {
-            fetch(`/api/valve_relay/${relayId}/status`)
+        // JavaScript function to trigger application update
+        function updateApplication() {
+            if (confirm('Are you sure you want to update the application? This will pull the latest changes and restart the service.')) {
+                fetch('/api/settings/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                })
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        updateRelayButton(relayId, data.relay_status);
+                        alert('Update initiated successfully. The service is restarting...');
+                    } else {
+                        alert('Update failed: ' + data.error);
                     }
                 })
-                .catch(error => console.error(`Error fetching status for relay ${relayId}:`, error));
-        });
-    }
-
-    function updateRelayButton(relayId, status) {
-        const onButton = document.getElementById(`relay-${relayId}-on`);
-        const offButton = document.getElementById(`relay-${relayId}-off`);
-        if (status === 'on') {
-            onButton.classList.add('active');
-            offButton.classList.remove('active');
-        } else {
-            onButton.classList.remove('active');
-            offButton.classList.add('active');
+                .catch(error => {
+                    alert('Error updating application: ' + error);
+                });
+            }
         }
-    }
 
-    function turnOnFeedPump() {
-        fetch('/api/feed_pump/on', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status !== 'success') {
-                    console.error('Failed to turn on feed pump:', data.error);
-                } else {
-                    updateFeedPumpButton('on');
-                }
+        function loadSettings() {
+            fetch('/api/settings')
+                .then(response => response.json())
+                .then(data => {
+                    const plantsList = document.getElementById('additional-plants-list');
+                    if (plantsList) {
+                        plantsList.innerHTML = '';
+                        data.additional_plants.forEach((plant, index) => {
+                            const div = document.createElement('div');
+                            div.className = 'valve-rename-cell';
+                            div.innerHTML = `
+                                <input type="text" value="${plant}" disabled>
+                                <button class="small-btn secondary-btn" onclick="removePlant(${index})">Remove</button>
+                            `;
+                            plantsList.appendChild(div);
+                        });
+                    }
+
+                    data.calibration_factors = data.calibration_factors || {};
+                    const freshCal = document.getElementById('fresh-cal');
+                    if (freshCal) freshCal.value = data.calibration_factors.fresh || 28.390575;
+                    const feedCal = document.getElementById('feed-cal');
+                    if (feedCal) feedCal.value = data.calibration_factors.feed || 28.390575;
+                    const drainCal = document.getElementById('drain-cal');
+                    if (drainCal) drainCal.value = data.calibration_factors.drain || 28.390575;
+
+                    const relayPorts = data.relay_ports || { feed_water: 1, fresh_water: 2 };
+                    const feedPortEl = document.getElementById('feed-water-relay-port');
+                    if (feedPortEl) feedPortEl.value = relayPorts.feed_water;
+                    const freshPortEl = document.getElementById('fresh-water-relay-port');
+                    if (freshPortEl) freshPortEl.value = relayPorts.fresh_water;
+
+                    const nutrientConcEl = document.getElementById('nutrient-conc');
+                    if (nutrientConcEl) nutrientConcEl.value = data.nutrient_concentration || 1;
+
+                    data.usb_roles = data.usb_roles || {};
+                    populateUsbDevices(data.usb_roles.valve_relay);
+
+                    loadRelayStatuses();
+
+                    const feedPumpIp = document.getElementById('feed-pump-ip');
+                    const feedPumpIoNumber = document.getElementById('feed-pump-io-number');
+                    const feedPumpIo = document.getElementById('feed-pump-io');
+                    const feedPumpShelly = document.getElementById('feed-pump-shelly');
+                    if (feedPumpIp && feedPumpIoNumber && feedPumpIo && feedPumpShelly) {
+                        const feedPump = data.feed_pump || {};
+                        feedPumpIp.value = feedPump.ip || '';
+                        feedPumpIoNumber.value = feedPump.io_number || '';
+                        feedPumpIo.checked = feedPump.type === 'io';
+                        feedPumpShelly.checked = feedPump.type === 'shelly';
+                        if (feedPumpIo.checked) {
+                            feedPumpIp.disabled = true;
+                            feedPumpIoNumber.disabled = false;
+                        } else if (feedPumpShelly.checked) {
+                            feedPumpIoNumber.disabled = true;
+                            feedPumpIp.disabled = false;
+                        } else {
+                            feedPumpIp.disabled = true;
+                            feedPumpIoNumber.disabled = true;
+                        }
+                    }
+
+                    const drainFlowSettings = data.drain_flow_settings || {};
+                    const activationFlow = document.getElementById('activation-flow-rate');
+                    if (activationFlow) activationFlow.value = drainFlowSettings.activation_flow_rate !== undefined ? drainFlowSettings.activation_flow_rate : 0.2;
+                    const minFlow = document.getElementById('min-flow-rate');
+                    if (minFlow) minFlow.value = drainFlowSettings.min_flow_rate !== undefined ? drainFlowSettings.min_flow_rate : 0.05;
+                    const activationDelay = document.getElementById('activation-delay');
+                    if (activationDelay) activationDelay.value = drainFlowSettings.activation_delay !== undefined ? drainFlowSettings.activation_delay : 5;
+                    const minFlowCheckDelay = document.getElementById('min-flow-check-delay');
+                    if (minFlowCheckDelay) minFlowCheckDelay.value = drainFlowSettings.min_flow_check_delay !== undefined ? drainFlowSettings.min_flow_check_delay : 30;
+                    const maxDrainTime = document.getElementById('max-drain-time');
+                    if (maxDrainTime) maxDrainTime.value = drainFlowSettings.max_drain_time !== undefined ? drainFlowSettings.max_drain_time : 600;
+
+                    const discordEnabled = document.getElementById('discord-enabled');
+                    if (discordEnabled) discordEnabled.checked = data.discord_enabled || false;
+                    const discordWebhookUrl = document.getElementById('discord-webhook-url');
+                    if (discordWebhookUrl) discordWebhookUrl.value = data.discord_webhook_url || '';
+                    const telegramEnabled = document.getElementById('telegram-enabled');
+                    if (telegramEnabled) telegramEnabled.checked = data.telegram_enabled || false;
+                    const telegramBotToken = document.getElementById('telegram-bot-token');
+                    if (telegramBotToken) telegramBotToken.value = data.telegram_bot_token || '';
+                    const telegramChatId = document.getElementById('telegram-chat-id');
+                    if (telegramChatId) telegramChatId.value = data.telegram_chat_id || '';
+                })
+                .catch(error => console.error('Error loading settings:', error));
+        }
+
+        function populateUsbDevices(currentDevice) {
+            fetch('/api/settings/usb_devices')
+                .then(response => response.json())
+                .then(devices => {
+                    const valveDevSelect = document.getElementById('valve-relay-device');
+                    if (valveDevSelect) {
+                        valveDevSelect.innerHTML = '<option value="">Select a device</option>';
+                        devices.forEach(dev => {
+                            const option = document.createElement('option');
+                            option.value = dev.device;
+                            option.textContent = dev.device;
+                            if (option.value === currentDevice) {
+                                option.selected = true;
+                            }
+                            valveDevSelect.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => console.error('Error fetching USB devices:', error));
+        }
+
+        function addAdditionalPlant() {
+            const newIp = document.getElementById('new-plant-ip')?.value.trim();
+            if (!newIp) {
+                alert('Please enter a valid IP or DNS.');
+                return;
+            }
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ additional_plants: [newIp] })
             })
-            .catch(error => console.error('Error turning on feed pump:', error));
-    }
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('new-plant-ip').value = '';
+                        loadSettings();
+                    } else {
+                        alert('Failed to add plant: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error adding plant:', error));
+        }
 
-    function turnOffFeedPump() {
-        fetch('/api/feed_pump/off', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status !== 'success') {
-                    console.error('Failed to turn off feed pump:', data.error);
-                } else {
-                    updateFeedPumpButton('off');
-                }
+        function removePlant(index) {
+            fetch('/api/settings/remove_plant', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index: index })
             })
-            .catch(error => console.error('Error turning off feed pump:', error));
-    }
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        loadSettings();
+                    } else {
+                        alert('Failed to remove plant: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error removing plant:', error));
+        }
 
-    function updateFeedPumpButton(status) {
-        const onButton = document.getElementById('feed-pump-on');
-        const offButton = document.getElementById('feed-pump-off');
-        if (onButton && offButton) {
+        function saveCalibrationFactors() {
+            const fresh = parseFloat(document.getElementById('fresh-cal')?.value);
+            const feed = parseFloat(document.getElementById('feed-cal')?.value);
+            const drain = parseFloat(document.getElementById('drain-cal')?.value);
+
+            if (isNaN(fresh) || isNaN(feed) || isNaN(drain)) {
+                alert('Please enter valid numbers for all calibration factors.');
+                return;
+            }
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ calibration_factors: { fresh, feed, drain } })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Calibration factors saved successfully.');
+                        loadSettings();
+                    } else {
+                        alert('Failed to save calibration factors: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error saving calibration factors:', error));
+        }
+
+        function saveNutrientConcentration() {
+            const concentration = parseFloat(document.getElementById('nutrient-conc')?.value);
+
+            if (isNaN(concentration)) {
+                alert('Please enter a valid number for nutrient concentration.');
+                return;
+            }
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nutrient_concentration: concentration })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Nutrient concentration saved successfully.');
+                        loadSettings();
+                    } else {
+                        alert('Failed to save nutrient concentration: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error saving nutrient concentration:', error));
+        }
+
+        function saveUsbAssignment(role, device) {
+            fetch("/api/settings/assign_usb", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role, device })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert(`${role} assigned successfully.`);
+                        loadSettings();
+                    } else {
+                        alert(`Failed to assign ${role}: ${data.error}`);
+                    }
+                })
+                .catch(error => console.error(`Error assigning ${role}:`, error));
+        }
+
+        function turnOnRelay(relayId) {
+            fetch(`/api/valve_relay/${relayId}/on`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateRelayButton(relayId, 'on');
+                    } else {
+                        console.error(`Failed to turn on relay ${relayId}: ${data.error}`);
+                    }
+                })
+                .catch(error => console.error(`Error turning on relay ${relayId}:`, error));
+        }
+
+        function turnOffRelay(relayId) {
+            fetch(`/api/valve_relay/${relayId}/off`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateRelayButton(relayId, 'off');
+                    } else {
+                        console.error(`Failed to turn off relay ${relayId}: ${data.error}`);
+                    }
+                })
+                .catch(error => console.error(`Error turning off relay ${relayId}:`, error));
+        }
+
+        function loadRelayStatuses() {
+            [1, 2].forEach(relayId => {
+                fetch(`/api/valve_relay/${relayId}/status`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            updateRelayButton(relayId, data.relay_status);
+                        }
+                    })
+                    .catch(error => console.error(`Error fetching status for relay ${relayId}:`, error));
+            });
+        }
+
+        function updateRelayButton(relayId, status) {
+            const onButton = document.getElementById(`relay-${relayId}-on`);
+            const offButton = document.getElementById(`relay-${relayId}-off`);
             if (status === 'on') {
                 onButton.classList.add('active');
                 offButton.classList.remove('active');
@@ -688,7 +672,46 @@
                 offButton.classList.add('active');
             }
         }
-    }
+
+        function turnOnFeedPump() {
+            fetch('/api/feed_pump/on', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        console.error('Failed to turn on feed pump:', data.error);
+                    } else {
+                        updateFeedPumpButton('on');
+                    }
+                })
+                .catch(error => console.error('Error turning on feed pump:', error));
+        }
+
+        function turnOffFeedPump() {
+            fetch('/api/feed_pump/off', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        console.error('Failed to turn off feed pump:', data.error);
+                    } else {
+                        updateFeedPumpButton('off');
+                    }
+                })
+                .catch(error => console.error('Error turning off feed pump:', error));
+        }
+
+        function updateFeedPumpButton(status) {
+            const onButton = document.getElementById('feed-pump-on');
+            const offButton = document.getElementById('feed-pump-off');
+            if (onButton && offButton) {
+                if (status === 'on') {
+                    onButton.classList.add('active');
+                    offButton.classList.remove('active');
+                } else {
+                    onButton.classList.remove('active');
+                    offButton.classList.add('active');
+                }
+            }
+        }
     </script>
 </head>
 <body>
@@ -704,6 +727,12 @@
     <main>
         <h1>Settings</h1>
         <p class="subtitle">Configure your flow meter monitor.</p>
+
+        <div class="data-container">
+            <h3>Application Update</h3>
+            <button class="small-btn" onclick="updateApplication()">Update Application</button>
+            <p class="tooltip">Pulls the latest changes from GitHub and restarts the service.</p>
+        </div>
 
         <div class="data-container">
             <h3>Plants to feed</h3>
