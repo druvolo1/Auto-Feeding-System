@@ -292,7 +292,7 @@
 
                 sensorKeys.forEach(key => {
                     const sensor = plant.water_level?.[key] || {triggered: false};
-                    const status = isOffline ? 'Offline' : (sensor.triggered ? 'Not Present' : 'Present');
+                    const status = isOffline ? 'Offline' : (sensor.triggered ? 'Present' : 'Not Present');
                     const td = document.createElement('td');
                     td.innerText = status;
                     row.appendChild(td);
