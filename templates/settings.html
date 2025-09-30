@@ -404,19 +404,12 @@
                         } else {
                             feedback += `ℹ️ No new requirements needed.\nDry-run output:\n${data.pip_dry_output}\n\n`;
                         }
-                        feedback += `🚀 Update complete! Restarting service...\nThe page will reload in a few seconds.`;
+                        feedback += `🚀 Update complete! Restarting service...\nClick 'Close & Reload' to refresh the page.`;
                         progress.textContent = feedback;
 
                         title.textContent = 'Update Successful!';
                         closeBtn.style.display = 'inline-block';
                         closeBtn.textContent = 'Close & Reload';
-
-                        // Auto-reload after 5 seconds
-                        setTimeout(() => {
-                            if (confirm('Reload the page to continue?')) {
-                                location.reload();
-                            }
-                        }, 5000);
                     } else {
                         progress.textContent += `\n❌ Update failed: ${data.error}\nGit output (if available):\n${data.git_output || 'N/A'}\n`;
                         title.textContent = 'Update Failed';
@@ -432,7 +425,6 @@
                 });
             }
         }
-
         function closeUpdateModal() {
             document.getElementById('update-modal').style.display = 'none';
             document.getElementById('overlay').style.display = 'none';
