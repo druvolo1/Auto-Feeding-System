@@ -431,7 +431,7 @@
             document.getElementById('update-modal').style.display = 'none';
             document.getElementById('overlay').style.display = 'none';
             if (document.getElementById('update-title').textContent === 'Update Successful!') {
-                location.reload();
+                window.location.href = window.location.href; // Force reload bypassing cache
             }
         }
 
