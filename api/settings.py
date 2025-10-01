@@ -70,11 +70,49 @@ def update_application():
 @settings_blueprint.route('', methods=['GET'])
 def get_settings():
     settings = load_settings()
-    # Ensure debug_states exists and includes dns-resolution
-    settings.setdefault('debug_states', {}).setdefault('dns-resolution', False)
-    # Ensure notification settings exist
-    settings.setdefault('discord_enabled', False)
-    settings.setdefault('discord_webhook_url', '')
+    # Ensure debug_states exists with defaults
+    settings.setdefault('debug_states', {
+        "fresh-flow": False,
+        "feed-flow": False,
+        "drain-flow": False,
+        "socket-connections": False,
+        "plants": False,
+        "dns-resolution": False,
+        "local-websocket": False,
+        "notifications": False,
+        "feeding-extended-log": False,
+        "feeding": True
+    })
+    # Ensure calibration_factors exists with defaults
+    settings.setdefault('calibration_factors', {
+        "fresh": 28.390575,
+        "feed": 28.390575,
+        "drain": 28.390575
+    })
+    # Ensure relay_ports exists with defaults
+    settings.setdefault('relay_ports', {
+        "feed_water": 1,
+        "fresh_water": 2
+    })
+    # usb_roles should not have defaults, as per instructions
+    # Ensure nutrient_concentration exists with default
+    settings.setdefault('nutrient_concentration', 3)
+    # Ensure feed_pump exists with defaults
+    settings.setdefault('feed_pump', {
+        "io_number": "25",
+        "type": "io"
+    })
+    # Ensure drain_flow_settings exists with defaults
+    settings.setdefault('drain_flow_settings', {
+        "activation_flow_rate": 2,
+        "min_flow_rate": 0.5,
+        "activation_delay": 550,
+        "min_flow_check_delay": 3,
+        "max_drain_time": 120
+    })
+    # Ensure notification settings exist with defaults
+    settings.setdefault('discord_enabled', True)
+    settings.setdefault('discord_webhook_url', "https://discordapp.com/api/webhooks/1351717917825175642/72z2SftBRomY4zKefGUh9if2tthV8n9iSvnJF804v9Sfi8PUy9i-Sp3IOz6UZZwE1zjR")
     settings.setdefault('telegram_enabled', False)
     settings.setdefault('telegram_bot_token', '')
     settings.setdefault('telegram_chat_id', '')
@@ -153,7 +191,7 @@ def update_settings():
                     return jsonify({"status": "failure", "error": "Max drain time must be greater than 0"}), 400
                 settings['drain_flow_settings'] = drain_flow_settings
             else:
-                return jupytext({"status": "failure", "error": "Invalid drain flow settings"}), 400
+                return jsonify({"status": "failure", "error": "Invalid drain flow settings"}), 400
 
         # Handle notification settings
         if 'discord_enabled' in data:
