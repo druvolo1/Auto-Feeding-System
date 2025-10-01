@@ -83,90 +83,101 @@ def get_settings():
 
 @settings_blueprint.route('', methods=['POST'])
 def update_settings():
-    data = request.get_json() or {}
-    settings = load_settings()
+    try:
+        data = request.get_json() or {}
+        settings = load_settings()
 
-    plants_changed = 'additional_plants' in data
-    if plants_changed:
-        settings['additional_plants'] = settings.get('additional_plants', []) + data['additional_plants']
+        plants_changed = 'additional_plants' in data
+        if plants_changed:
+            settings['additional_plants'] = settings.get('additional_plants', []) + data['additional_plants']
 
-    if 'calibration_factors' in data:
-        settings['calibration_factors'] = data['calibration_factors']
-        # Update running calibration factors in sensor modules
-        api.fresh_flow.set_calibration_factor(settings['calibration_factors']['fresh'])
-        api.feed_flow.set_calibration_factor(settings['calibration_factors']['feed'])
-        api.drain_flow.set_calibration_factor(settings['calibration_factors']['drain'])
+        if 'calibration_factors' in data:
+            calibration_factors = data['calibration_factors']
+            if not all(key in calibration_factors for key in ['fresh', 'feed', 'drain']):
+                return jsonify({"status": "failure", "error": "Missing calibration factors keys"}), 400
+            settings['calibration_factors'] = calibration_factors
+            # Update running calibration factors in sensor modules
+            try:
+                api.fresh_flow.set_calibration_factor(calibration_factors['fresh'])
+                api.feed_flow.set_calibration_factor(calibration_factors['feed'])
+                api.drain_flow.set_calibration_factor(calibration_factors['drain'])
+            except AttributeError as ae:
+                return jsonify({"status": "failure", "error": f"Calibration module error: {str(ae)}"}), 500
+            except Exception as e:
+                return jsonify({"status": "failure", "error": f"Error setting calibration factors: {str(e)}"}), 500
 
-    if 'relay_ports' in data:
-        settings['relay_ports'] = data['relay_ports']
+        if 'relay_ports' in data:
+            settings['relay_ports'] = data['relay_ports']
 
-    if 'nutrient_concentration' in data:
-        settings['nutrient_concentration'] = data['nutrient_concentration']
+        if 'nutrient_concentration' in data:
+            settings['nutrient_concentration'] = data['nutrient_concentration']
 
-    # Handle debug states, including dns-resolution
-    if 'debug_states' in data:
-        debug_states = settings.setdefault('debug_states', {})
-        for key, value in data['debug_states'].items():
-            if isinstance(value, bool):
-                debug_states[key] = value
-        settings['debug_states'] = debug_states
+        # Handle debug states, including dns-resolution
+        if 'debug_states' in data:
+            debug_states = settings.setdefault('debug_states', {})
+            for key, value in data['debug_states'].items():
+                if isinstance(value, bool):
+                    debug_states[key] = value
+            settings['debug_states'] = debug_states
 
-    # Handle feed pump settings
-    if 'feed_pump' in data:
-        feed_pump = data['feed_pump']
-        if isinstance(feed_pump.get('type'), str):
-            if feed_pump['type'] == 'io' and 'io_number' in feed_pump and feed_pump['io_number'].isdigit():
-                settings['feed_pump'] = {
-                    'io_number': feed_pump['io_number'],
-                    'type': feed_pump['type']
-                }
-            elif feed_pump['type'] == 'shelly' and 'ip' in feed_pump:
-                settings['feed_pump'] = {
-                    'ip': feed_pump['ip'],
-                    'type': feed_pump['type']
-                }
+        # Handle feed pump settings
+        if 'feed_pump' in data:
+            feed_pump = data['feed_pump']
+            if isinstance(feed_pump.get('type'), str):
+                if feed_pump['type'] == 'io' and 'io_number' in feed_pump and feed_pump['io_number'].isdigit():
+                    settings['feed_pump'] = {
+                        'io_number': feed_pump['io_number'],
+                        'type': feed_pump['type']
+                    }
+                elif feed_pump['type'] == 'shelly' and 'ip' in feed_pump:
+                    settings['feed_pump'] = {
+                        'ip': feed_pump['ip'],
+                        'type': feed_pump['type']
+                    }
+                else:
+                    return jsonify({"status": "failure", "error": "Invalid feed pump configuration"}), 400
             else:
                 return jsonify({"status": "failure", "error": "Invalid feed pump configuration"}), 400
-        else:
-            return jsonify({"status": "failure", "error": "Invalid feed pump configuration"}), 400
 
-    # Handle drain flow settings
-    if 'drain_flow_settings' in data:
-        drain_flow_settings = data['drain_flow_settings']
-        if (isinstance(drain_flow_settings.get('activation_flow_rate'), (int, float)) and
-            isinstance(drain_flow_settings.get('min_flow_rate'), (int, float)) and
-            isinstance(drain_flow_settings.get('activation_delay'), (int, float)) and
-            isinstance(drain_flow_settings.get('min_flow_check_delay'), (int, float)) and
-            isinstance(drain_flow_settings.get('max_drain_time'), (int, float))):
-            if drain_flow_settings['min_flow_rate'] >= drain_flow_settings['activation_flow_rate']:
-                return jsonify({"status": "failure", "error": "Minimum flow rate must be less than activation flow rate"}), 400
-            if drain_flow_settings['max_drain_time'] <= 0:
-                return jsonify({"status": "failure", "error": "Max drain time must be greater than 0"}), 400
-            settings['drain_flow_settings'] = drain_flow_settings
-        else:
-            return jsonify({"status": "failure", "error": "Invalid drain flow settings"}), 400
+        # Handle drain flow settings
+        if 'drain_flow_settings' in data:
+            drain_flow_settings = data['drain_flow_settings']
+            if (isinstance(drain_flow_settings.get('activation_flow_rate'), (int, float)) and
+                isinstance(drain_flow_settings.get('min_flow_rate'), (int, float)) and
+                isinstance(drain_flow_settings.get('activation_delay'), (int, float)) and
+                isinstance(drain_flow_settings.get('min_flow_check_delay'), (int, float)) and
+                isinstance(drain_flow_settings.get('max_drain_time'), (int, float))):
+                if drain_flow_settings['min_flow_rate'] >= drain_flow_settings['activation_flow_rate']:
+                    return jsonify({"status": "failure", "error": "Minimum flow rate must be less than activation flow rate"}), 400
+                if drain_flow_settings['max_drain_time'] <= 0:
+                    return jsonify({"status": "failure", "error": "Max drain time must be greater than 0"}), 400
+                settings['drain_flow_settings'] = drain_flow_settings
+            else:
+                return jupytext({"status": "failure", "error": "Invalid drain flow settings"}), 400
 
-    # Handle notification settings
-    if 'discord_enabled' in data:
-        settings['discord_enabled'] = data['discord_enabled']
-    if 'discord_webhook_url' in data:
-        settings['discord_webhook_url'] = data['discord_webhook_url']
-    if 'telegram_enabled' in data:
-        settings['telegram_enabled'] = data['telegram_enabled']
-    if 'telegram_bot_token' in data:
-        settings['telegram_bot_token'] = data['telegram_bot_token']
-    if 'telegram_chat_id' in data:
-        settings['telegram_chat_id'] = data['telegram_chat_id']
+        # Handle notification settings
+        if 'discord_enabled' in data:
+            settings['discord_enabled'] = data['discord_enabled']
+        if 'discord_webhook_url' in data:
+            settings['discord_webhook_url'] = data['discord_webhook_url']
+        if 'telegram_enabled' in data:
+            settings['telegram_enabled'] = data['telegram_enabled']
+        if 'telegram_bot_token' in data:
+            settings['telegram_bot_token'] = data['telegram_bot_token']
+        if 'telegram_chat_id' in data:
+            settings['telegram_chat_id'] = data['telegram_chat_id']
 
-    save_settings(settings)
+        save_settings(settings)
+        
+        if plants_changed:
+            from app import reload_event
+            print("[DEBUG] Triggered reload_event.set() for add")
+            reload_event.set()  # Trigger reload
+
+        return jsonify({"status": "success", "settings": settings})
+    except Exception as e:
+        return jsonify({"status": "failure", "error": f"Unexpected error in update_settings: {str(e)}"}), 500
     
-    if plants_changed:
-        from app import reload_event
-        print("[DEBUG] Triggered reload_event.set() for add")
-        reload_event.set()  # Trigger reload
-
-    return jsonify({"status": "success", "settings": settings})
-
 @settings_blueprint.route('/remove_plant', methods=['POST'])
 def remove_plant():
     data = request.get_json() or {}

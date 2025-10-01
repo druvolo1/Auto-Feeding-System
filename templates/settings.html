@@ -619,7 +619,12 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ calibration_factors: { fresh, feed, drain } })
             })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.status === 'success') {
                         alert('Calibration factors saved successfully.');
@@ -628,7 +633,10 @@
                         alert('Failed to save calibration factors: ' + data.error);
                     }
                 })
-                .catch(error => console.error('Error saving calibration factors:', error));
+                .catch(error => {
+                    console.error('Error saving calibration factors:', error);
+                    alert('Failed to save: ' + error.message);
+                });
         }
 
         function saveNutrientConcentration() {
