@@ -12,6 +12,7 @@ RELAY_OFF_COMMANDS = {
     2: b'\xA0\x02\x00\xA2'   # Turn relay 2 OFF
 }
 
+
 relay_status = {
     1: "off",
     2: "off"
