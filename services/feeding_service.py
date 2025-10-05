@@ -190,10 +190,11 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
     start_time = time.time()  # Start timeout clock after activation delay
     low_flow_start = None
 
-    with _app.app_context():  # NEW: Wrap the loop in app context to fix the error
+    with _app.app_context():  # Wrap the loop in app context
         while True:
             if stop_feeding_flag:
                 log_feeding_feedback(f"Feeding interrupted during drain conditions monitoring for plant {plant_ip}", plant_ip, 'error', sio)
+                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)  # Ensure off on interrupt
                 drain_complete['status'] = False
                 drain_complete['reason'] = 'interrupted'
                 break
@@ -205,6 +206,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             if elapsed > max_drain_time:
                 log_feeding_feedback(f"Max drain time {max_drain_time}s reached for {plant_ip}, completing drain", plant_ip, 'warning', sio)
                 send_notification(f"Max drain time reached for {plant_ip} during feeding")
+                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)  # NEW: Turn off valve
                 drain_complete['status'] = True
                 drain_complete['reason'] = 'timeout'
                 break
@@ -217,6 +219,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
 
             if empty_triggered:
                 log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
+                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)  # NEW: Turn off valve
                 drain_complete['status'] = True
                 drain_complete['reason'] = 'sensor_triggered'
                 break
@@ -233,6 +236,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                 if low_flow_duration >= min_flow_check_delay:
                     log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, 'warning', sio)
                     send_notification(f"Low drain flow detected for {plant_ip} during feeding")
+                    control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)  # NEW: Turn off valve
                     drain_complete['status'] = True
                     drain_complete['reason'] = 'low_flow'
                     break
