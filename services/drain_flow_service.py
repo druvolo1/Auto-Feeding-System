@@ -2,6 +2,7 @@ import RPi.GPIO as GPIO
 import time
 from threading import Lock
 from api.debug import debug_states  # Import for conditional debug
+from services.feeding_service import log_feeding_feedback  # NEW: For error logging
 
 FLOW_PIN = 24  # BCM pin for drain flow (assuming a different pin)
 CALIBRATION_FACTOR = 28.390575  # Pulses per gallon (default)
@@ -18,6 +19,7 @@ def flow_reader():
             print("[DEBUG] Drain GPIO setup complete on pin 24. Starting polling loop...")
     except Exception as e:
         print(f"[ERROR] Drain GPIO setup failed: {e}")
+        log_feeding_feedback(f"Drain flow sensor setup failed: {str(e)}", status='error')  # NEW: Log to feeding feedback
         return
 
     while True:
@@ -41,14 +43,17 @@ def flow_reader():
 
             with flow_lock:
                 global latest_flow, total_volume
-                latest_flow = flow_rate
+                latest_flow = flow_rate  # Always set to float
                 total_volume += flow_rate / 60  # Accumulate (gal/min / 60 = gallons this second)
         except Exception as e:
             print(f"[ERROR] Drain flow reader loop error: {e}")
+            log_feeding_feedback(f"Drain flow reader error: {str(e)}", status='error')  # NEW: Log errors
+            with flow_lock:
+                latest_flow = 0.0  # Treat error as 0 flow
 
 def get_latest_flow_rate():
     with flow_lock:
-        return latest_flow
+        return latest_flow if latest_flow is not None else 0.0  # NEW: Default to 0 if None
 
 def get_total_volume():
     with flow_lock:

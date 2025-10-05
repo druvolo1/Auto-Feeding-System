@@ -164,74 +164,74 @@ def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retri
     return False
 
 def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, settings, sio):
-    """Monitor drain flow and empty sensor concurrently, setting drain_complete when either condition is met."""
-    global drain_complete
-    with _app.app_context():
-        activation_flow_rate = settings.get('activation_flow_rate', 0.2)
-        min_flow_rate = settings.get('min_flow_rate', 0.05)
-        activation_delay = settings.get('activation_delay', 5)
-        min_flow_check_delay = settings.get('min_flow_check_delay', 30)
-        max_drain_time = settings.get('max_drain_time', 600)
+    global drain_complete, stop_feeding_flag
+    drain_settings = settings.get('drain_flow_settings', {})
+    activation_delay = drain_settings.get('activation_delay', 5)
+    activation_flow_rate = drain_settings.get('activation_flow_rate', 1.1)
+    min_flow_rate = drain_settings.get('min_flow_rate', 0.05)
+    min_flow_check_delay = drain_settings.get('min_flow_check_delay', 30)
+    max_drain_time = drain_settings.get('max_drain_time', 300)
 
-        with current_app.config['plant_lock']:
-            plant_data = current_app.config['plant_data']
-            water_level = plant_data.get(plant_ip, {}).get('water_level', {})
-            empty_sensor = next((k for k, v in water_level.items() if v.get('label') == 'Empty'), None)
-            initial_triggered = plant_data.get(plant_ip, {}).get('water_level', {}).get(empty_sensor, {}).get('triggered', 'unknown') if empty_sensor else 'unknown'
-            if not empty_sensor:
-                log_extended_feedback(f"No Empty sensor configured for plant {plant_ip} in drain conditions monitor", plant_ip, status='error', sio=sio)
-                send_notification(f"No Empty sensor configured for plant {plant_ip} in drain conditions monitor")
-                drain_complete = {'status': False, 'reason': 'no_sensor'}
-                return
+    eventlet.sleep(activation_delay)
 
-        start_time = time.time()
-        monitoring_started = False
-        low_flow_start = None
-
-        while time.time() - start_time < max_drain_time:
-            if stop_feeding_flag:
-                log_feeding_feedback(f"Feeding interrupted during drain conditions monitoring for plant {plant_ip}", plant_ip, status='error', sio=sio)
-                send_notification(f"Feeding interrupted during drain conditions monitoring for plant {plant_ip}")
-                drain_complete = {'status': False, 'reason': 'interrupted'}
-                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
-                return
-
-            with current_app.config['plant_lock']:
-                current_triggered = plant_data.get(plant_ip, {}).get('water_level', {}).get(empty_sensor, {}).get('triggered', 'unknown')
-            if current_triggered == False and current_triggered != initial_triggered:
-                log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, status='success', sio=sio)
-                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
-                drain_complete = {'status': True, 'reason': 'sensor_triggered'}
-                return
-
-            flow_rate = get_latest_drain_flow_rate()
-            elapsed_time = time.time() - start_time
-            log_extended_feedback(f"Drain flow for {plant_ip}: {flow_rate:.2f} Gal/min (elapsed: {elapsed_time:.1f}s)", plant_ip, status='info', sio=sio)
-
-            if not monitoring_started and elapsed_time >= activation_delay:
-                monitoring_started = True
-                log_feeding_feedback(f"Starting flow monitoring for {plant_ip} after activation delay of {activation_delay}s", plant_ip, status='info', sio=sio)
-
-            if monitoring_started:
-                if flow_rate >= min_flow_rate:
-                    low_flow_start = None
-                else:
-                    if low_flow_start is None:
-                        low_flow_start = time.time()
-                    if time.time() - low_flow_start >= min_flow_check_delay:
-                        log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, status='warning', sio=sio)
-                        send_notification(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill")
-                        control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
-                        drain_complete = {'status': True, 'reason': 'low_flow'}
-                        return
-
-            eventlet.sleep(1)
-
-        log_feeding_feedback(f"Max drain time ({max_drain_time}s) exceeded for {plant_ip}, aborting drain and proceeding to fill as failsafe", plant_ip, status='warning', sio=sio)
-        send_notification(f"Max drain time ({max_drain_time}s) exceeded for {plant_ip}, aborting drain")
+    # Initial activation flow check
+    initial_flow = get_latest_drain_flow_rate()
+    if initial_flow is None or initial_flow < activation_flow_rate:
+        log_feeding_feedback(f"Initial drain flow {initial_flow or 'None'} below activation threshold {activation_flow_rate} Gal/min for {plant_ip}, aborting drain", plant_ip, 'error', sio)
+        send_notification(f"Drain activation flow check failed for {plant_ip}")
         control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
-        drain_complete = {'status': True, 'reason': 'timeout'}
+        drain_complete['status'] = False
+        drain_complete['reason'] = 'no_activation_flow'
+        return
 
+    log_feeding_feedback(f"Starting flow monitoring for {plant_ip} after activation delay of {activation_delay}s", plant_ip, 'info', sio)
+
+    start_time = time.time()  # Start timeout clock after activation delay
+    low_flow_start = None
+
+    while True:
+        if stop_feeding_flag:
+            log_feeding_feedback(f"Feeding interrupted during drain conditions monitoring for plant {plant_ip}", plant_ip, 'error', sio)
+            drain_complete['status'] = False
+            drain_complete['reason'] = 'interrupted'
+            break
+
+        # Enforce max_drain_time
+        if time.time() - start_time > max_drain_time:
+            log_feeding_feedback(f"Max drain time {max_drain_time}s reached for {plant_ip}, completing drain", plant_ip, 'warning', sio)
+            send_notification(f"Max drain time reached for {plant_ip} during feeding")
+            drain_complete['status'] = True
+            drain_complete['reason'] = 'timeout'
+            break
+
+        # Check empty sensor
+        with current_app.config['plant_lock']:
+            plant_data = current_app.config['plant_data'].get(plant_ip, {})
+            empty_triggered = plant_data.get('water_level', {}).get('empty', {}).get('triggered', False)
+
+        if empty_triggered:
+            log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
+            drain_complete['status'] = True
+            drain_complete['reason'] = 'sensor_triggered'
+            break
+
+        # Check low flow, treating None as 0
+        current_flow = get_latest_drain_flow_rate()
+        effective_flow = current_flow if current_flow is not None else 0.0
+        if effective_flow < min_flow_rate:
+            if low_flow_start is None:
+                low_flow_start = time.time()
+            if time.time() - low_flow_start >= min_flow_check_delay:
+                log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, 'warning', sio)
+                send_notification(f"Low drain flow detected for {plant_ip} during feeding")
+                drain_complete['status'] = True
+                drain_complete['reason'] = 'low_flow'
+                break
+        else:
+            low_flow_start = None
+
+        eventlet.sleep(0.1)  # Tighter loop for responsiveness
+        
 def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
     global stop_feeding_flag, drain_complete
     stop_feeding_flag = False
