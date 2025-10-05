@@ -51,6 +51,7 @@ def monitor_feed_mixing(socketio, app):
     components_off = False  # Flag to track if components have been turned off
     last_processed_plant = None  # Track the last plant processed
     mixing_completed = False  # Flag to track if mixing has completed for the current plant
+    last_logged_reset = None  # Track the last reset key to avoid repeated logs
 
     while True:
         with app.app_context():  # Create application context
@@ -81,12 +82,15 @@ def monitor_feed_mixing(socketio, app):
             use_feed = app.config.get('use_feed', True)
 
             # Reset flags when moving to a new plant or phase changes
+            reset_key = f"{plant_ip}_{phase}"  # Unique key for reset
             if plant_ip != last_processed_plant or phase != 'fill':
                 mixed = False
                 components_off = False
                 mixing_completed = False
                 last_processed_plant = plant_ip
-                log_extended_feedback(f"Reset mixing state for new plant {plant_ip} or phase change to {phase}", plant_ip, 'debug', socketio)
+                if reset_key != last_logged_reset:  # Log only if not recently logged
+                    log_extended_feedback(f"Reset mixing state for new plant {plant_ip} or phase change to {phase}", plant_ip, 'debug', socketio)
+                    last_logged_reset = reset_key
 
             if phase == 'fill' and plant_ip and not mixed and use_feed and not mixing_completed:
                 # Get system_volume from plant data
