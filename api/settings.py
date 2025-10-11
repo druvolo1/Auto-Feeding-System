@@ -8,7 +8,7 @@ import requests  # For sending Discord and Telegram test POSTs
 import subprocess
 import os
 
-CURRENT_VERSION = "v1.01"  # Update this manually before pushing to Git
+CURRENT_VERSION = "v1.0.82"  # Update this manually before pushing to Git
 
 settings_blueprint = Blueprint('settings', __name__)
 
