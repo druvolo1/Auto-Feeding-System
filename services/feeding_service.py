@@ -273,12 +273,12 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
     message = []
     had_empty = False
 
-    reset_fresh_total()
-    reset_feed_total()
-    reset_drain_total()
-    log_feeding_feedback("Reset all total volumes at start of sequence", status='info', sio=socketio_instance)
-
     for plant_ip in additional_plants:
+        reset_fresh_total()
+        reset_feed_total()
+        reset_drain_total()
+        log_feeding_feedback(f"Reset all total volumes for plant {plant_ip}", plant_ip, status='info', sio=socketio_instance)
+
         if stop_feeding_flag:
             log_feeding_feedback(f"Stopping sequence early due to interruption. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}", status='error', sio=socketio_instance)
             send_notification(f"Stopping sequence early due to interruption. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")

@@ -412,6 +412,10 @@ def debug_page():
 def logs_page():
     return render_template('logs.html')
 
+@app.route('/nutrient_calculator')
+def nutrient_calculator():
+    return render_template('nutrient_calculator.html')
+
 if __name__ == "__main__":
     # Resolve host for socketio.run to handle mDNS
     host = standardize_host_ip("0.0.0.0") or "0.0.0.0"

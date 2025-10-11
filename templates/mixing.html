@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nutrient Concentrate Calculator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Additional styles if needed to match exactly, but relying on the provided CSS */
+        .calculator-form {
+            display: grid;
+            gap: 10px;
+        }
+        #result {
+            margin-top: 20px;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/settings">Settings</a></li>
+            <li><a href="/debug">Debug</a></li>
+            <li><a href="/logs">Logs</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <h1>Nutrient Concentrate Calculator</h1>
+        <p class="subtitle">Calculate your nutrient dosages based on volume and concentration.</p>
+
+        <div class="data-container">
+            <form class="calculator-form">
+                <label for="normal_amount">Normal amount of nutrient:</label>
+                <input type="number" id="normal_amount" value="2" step="0.1">
+                
+                <label for="measurement_type">Measurement type:</label>
+                <select id="measurement_type">
+                    <option value="tablespoons">Tablespoons</option>
+                    <option value="teaspoons">Teaspoons</option>
+                    <option value="ml">mL</option>
+                    <option value="grams">Grams</option>
+                </select>
+                
+                <label for="normal_volume">Normal volume this amount is for (in gallons):</label>
+                <input type="number" id="normal_volume" value="5.5" step="0.1">
+                
+                <label for="concentration_factor">Concentration factor (e.g., 5 for 5x):</label>
+                <input type="number" id="concentration_factor" value="5" step="1">
+                
+                <label for="concentrate_volume">Concentrate reservoir volume (in gallons):</label>
+                <input type="number" id="concentrate_volume" value="13" step="0.1">
+                
+                <button type="button" onclick="calculate()">Calculate</button>
+            </form>
+            
+            <div id="result"></div>
+        </div>
+    </main>
+    
+    <script>
+        function calculate() {
+            const normalAmount = parseFloat(document.getElementById('normal_amount').value);
+            const measurementType = document.getElementById('measurement_type').value;
+            const normalVolume = parseFloat(document.getElementById('normal_volume').value);
+            const concentrationFactor = parseFloat(document.getElementById('concentration_factor').value);
+            const concentrateVolume = parseFloat(document.getElementById('concentrate_volume').value);
+            
+            if (isNaN(normalAmount) || isNaN(normalVolume) || isNaN(concentrationFactor) || isNaN(concentrateVolume)) {
+                document.getElementById('result').innerHTML = 'Please enter valid numbers.';
+                return;
+            }
+            
+            // Conversion factors to grams for Mega Crop (based on 6g per teaspoon, 1 tsp ≈ 5 mL)
+            let gramsPerUnit;
+            let unitLabel = measurementType.charAt(0).toUpperCase() + measurementType.slice(1); // Capitalize for display
+            if (measurementType === 'grams') {
+                gramsPerUnit = 1;
+            } else if (measurementType === 'teaspoons') {
+                gramsPerUnit = 6;
+            } else if (measurementType === 'tablespoons') {
+                gramsPerUnit = 18; // 3 tsp per tbsp
+            } else if (measurementType === 'ml') {
+                gramsPerUnit = 1.2; // 6g / 5mL
+            }
+            
+            const normalGrams = normalAmount * gramsPerUnit;
+            const normalGramsPerGallon = normalGrams / normalVolume;
+            const concentrateGramsPerGallon = normalGramsPerGallon * concentrationFactor;
+            const totalGrams = concentrateGramsPerGallon * concentrateVolume;
+            const totalInUnit = totalGrams / gramsPerUnit;
+            
+            document.getElementById('result').innerHTML = `
+                Amount to add to ${concentrateVolume} gallons for ${concentrationFactor}x concentrate:<br>
+                ${totalInUnit.toFixed(3)} ${unitLabel}<br>
+                (Approximately ${totalGrams.toFixed(2)} grams)
+            `;
+        }
+    </script>
+</body>
+</html>
