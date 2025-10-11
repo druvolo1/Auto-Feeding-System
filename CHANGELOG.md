@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.82] - 2025-10-11
+- added Nutrient Calculator
+
 ## [1.0.81] - 2025-09-21
 - added 2 hours timeout for "Feeding in Progress"
 
