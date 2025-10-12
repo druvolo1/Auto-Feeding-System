@@ -306,12 +306,13 @@ def broadcast_plants_status():
                     is_online = plant_data_entry.get('is_online', False) if plant_ip in plant_clients else False
                     if plant_ip in plant_data and plant_data[plant_ip].get('last_update'):
                         plant_data[plant_ip]['ip'] = resolved_ip or plant_ip
+                        plant_data[plant_ip]['original_host'] = plant_ip  # Add original_host
                         aggregated['plants'].append(plant_data[plant_ip])
                     else:
                         aggregated['plants'].append({
                             'ip': resolved_ip or plant_ip,
-                            'system_name': plant_ip,
-                            'plant_name': 'Offline',
+                            'system_name': 'Offline',
+                            'plant_name': 'N/A',
                             'start_date': 'N/A',
                             'settings': {
                                 'system_volume': 'N/A',
@@ -331,8 +332,14 @@ def broadcast_plants_status():
                                 'drain_valve_ip': '',
                                 'drain_valve': ''
                             },
-                            'is_online': is_online
+                            'is_online': is_online,
+                            'original_host': plant_ip  # Add original_host
                         })
+                
+                # Set is_currently_feeding based on current_plant_ip
+                current_plant = current_app.config.get('current_plant_ip')
+                for p in aggregated['plants']:
+                    p['is_currently_feeding'] = p['original_host'] == current_plant
                 
                 current_data = aggregated
                 

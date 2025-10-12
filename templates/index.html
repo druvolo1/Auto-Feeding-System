@@ -82,6 +82,18 @@
         #feeding-feedback p.error {
             color: #f00;
         }
+        #plants-table tr.currently-feeding {
+            background-color: #ffd700; /* Gold/yellow highlight */
+        }
+        #plants-table tr.currently-feeding:nth-child(even) {
+            background-color: #ffc700;
+        }
+        #plants-table tr.currently-feeding:hover {
+            background-color: #ffaa00;
+        }
+        #plants-table tr.currently-feeding.disconnected {
+            background-color: #ff0000; /* Keep disconnected red if needed, or adjust priority */
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
 </head>
@@ -273,6 +285,11 @@
                 if (isOffline) {
                     row.classList.add('disconnected');
                     console.warn(`Plant ${plantKey} is offline or has undefined is_online`);
+                }
+
+                // Add currently-feeding class if applicable
+                if (plant.is_currently_feeding) {
+                    row.classList.add('currently-feeding');
                 }
 
                 const cells = [
