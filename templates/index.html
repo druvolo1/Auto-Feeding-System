@@ -377,10 +377,6 @@
         }
 
         function stopAllFeeding() {
-            if (!feedingSequenceActive) {
-                console.warn('No feeding sequence active, ignoring stop request');
-                return;
-            }
             fetch('/api/feeding/stop_all', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},

@@ -248,23 +248,20 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             eventlet.sleep(0.1)  # Tighter loop for responsiveness
 
 def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
-    global stop_feeding_flag, drain_complete
+    global stop_feeding_flag
     stop_feeding_flag = False
-    drain_complete = {'status': False, 'reason': None}
-    socketio_instance = sio or current_app.extensions.get('socketio')
-    if not socketio_instance:
-        print("[ERROR] SocketIO not available for feeding sequence")
-        return "Failed to start feeding sequence: SocketIO not available"
-
     with current_app.app_context():
         current_app.config['feeding_sequence_active'] = True
-        current_app.config['current_feeding_phase'] = 'init'
+        current_app.config['current_feeding_phase'] = 'idle'
         current_app.config['current_plant_ip'] = None
         log_extended_feedback(f"Set feeding_sequence_active to True", status='debug')
-
+    socketio_instance = sio or _socketio or current_app.extensions.get('socketio')
     socketio_instance.emit('feeding_sequence_state', {'active': True}, namespace='/status')
 
     settings = load_settings()
+    nutrient_concentration = settings.get('nutrient_concentration', 3)
+    print(f"[DEBUG] Loaded nutrient_concentration: {nutrient_concentration}")  # Add this line for console logging
+    
     additional_plants = settings.get('additional_plants', [])
     log_feeding_feedback(f"Starting feeding sequence with use_fresh={use_fresh}, use_feed={use_feed}. Plants: {additional_plants}", status='info', sio=socketio_instance)
 
