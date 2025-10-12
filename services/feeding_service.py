@@ -287,13 +287,15 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             log_feeding_feedback(f"Failed to resolve plant IP {plant_ip}", plant_ip, status='error', sio=socketio_instance)
             send_notification(f"Failed to resolve plant IP {plant_ip}")
             message.append(f"Failed {plant_ip}: Resolution error")
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             continue
 
         if not validate_feeding_allowed(plant_ip):
             log_feeding_feedback(f"Feeding not allowed for plant {plant_ip}", plant_ip, status='warning', sio=socketio_instance)
             message.append(f"Skipped {plant_ip}: Not allowed")
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             continue
 
         with current_app.app_context():
@@ -308,7 +310,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             log_extended_feedback(f"Failed to set feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
             send_notification(f"Failed to set feeding_in_progress for plant {plant_ip}: {str(e)}")
             message.append(f"Failed {plant_ip}: Set progress error")
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             continue
 
         with current_app.config['plant_lock']:
@@ -328,7 +331,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             log_feeding_feedback(f"No drain valve configured for plant {plant_ip}", plant_ip, status='error', sio=socketio_instance)
             send_notification(f"No drain valve configured for plant {plant_ip}")
             message.append(f"Failed {plant_ip}: No drain valve")
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -340,7 +344,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
 
         if not control_valve(plant_ip, drain_valve_ip, drain_valve, 'on', sio=socketio_instance):
             message.append(f"Failed {plant_ip}: Drain valve on error")
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -367,7 +372,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
                 except Exception as e:
                     log_extended_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
                     send_notification(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}")
-                remaining_plants.remove(plant_ip)
+                if plant_ip in remaining_plants:
+                    remaining_plants.remove(plant_ip)
                 break
             time.sleep(1)
             drain_monitor_thread.wait()  # NEW: Wait for the thread to finish updating drain_complete (prevents race conditions)
@@ -379,7 +385,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             send_notification(f"Drain failed for plant {plant_ip}. Reason: {drain_complete['reason']}")
             message.append(f"Failed {plant_ip}: Drain error")
             control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=socketio_instance)
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -395,7 +402,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             log_feeding_feedback(f"Failed to confirm drain valve {drain_valve} ({drain_valve_label}) off for {plant_ip}", plant_ip, status='error', sio=socketio_instance)
             send_notification(f"Failed to confirm drain valve {drain_valve} ({drain_valve_label}) off for {plant_ip}")
             message.append(f"Failed {plant_ip}: Drain valve not off")
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -415,7 +423,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             log_feeding_feedback(f"No fill valve configured for plant {plant_ip}", plant_ip, status='error', sio=socketio_instance)
             send_notification(f"No fill valve configured for plant {plant_ip}")
             message.append(f"Failed {plant_ip}: No fill valve")
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -427,7 +436,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
 
         if not control_valve(plant_ip, fill_valve_ip, fill_valve, 'on', sio=socketio_instance):
             message.append(f"Failed {plant_ip}: Fill valve on error")
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -444,7 +454,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             send_notification(f"No Full sensor configured for plant {plant_ip}")
             message.append(f"Failed {plant_ip}: No Full sensor")
             control_valve(plant_ip, fill_valve_ip, fill_valve, 'off', sio=socketio_instance)
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -470,7 +481,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
                 stop_feeding_sequence()
             else:
                 message.append(f"Failed {plant_ip}: Fill timeout or error")
-                remaining_plants.remove(plant_ip)
+                if plant_ip in remaining_plants:
+                    remaining_plants.remove(plant_ip)
                 try:
                     response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                     response.raise_for_status()
@@ -489,7 +501,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             send_notification(f"Failed to confirm fill valve {fill_valve} ({fill_valve_label}) off for {plant_ip}")
             message.append(f"Failed {plant_ip}: Fill valve not turned off")
             control_valve(plant_ip, fill_valve_ip, fill_valve, 'off', sio=socketio_instance)
-            remaining_plants.remove(plant_ip)
+            if plant_ip in remaining_plants:
+                remaining_plants.remove(plant_ip)
             try:
                 response = requests.post(f"http://{resolved_plant_ip}:8000/api/settings/feeding_status", json={"in_progress": False}, timeout=5)
                 response.raise_for_status()
@@ -511,7 +524,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
 
         log_feeding_feedback(f"Completed full feeding cycle for plant {plant_ip}. Moving to next plant.", plant_ip, status='info', sio=socketio_instance)
         completed_plants.append(plant_ip)
-        remaining_plants.remove(plant_ip)
+        if plant_ip in remaining_plants:
+            remaining_plants.remove(plant_ip)
 
         # Check feed level after completing the current plant, before moving to the next one
         if use_feed and not had_empty:
@@ -533,7 +547,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
         log_feeding_feedback(f"Completed full feeding cycle for all plants.", status='info', sio=socketio_instance)
         send_notification(f"Completed full feeding cycle for all plants: {'; '.join(message) if message else 'All plants processed successfully'}. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
     else:
-        log_feeding_feedback(f"Feeding sequence terminated early.", status='info', sio=socketio_instance)
+        log_feeding_feedback(f"Feedingsequence terminated early.", status='info', sio=socketio_instance)
 
     if not message:
         message.append("No eligible plants processed")
