@@ -484,7 +484,7 @@
                     if (freshPortEl) freshPortEl.value = relayPorts.fresh_water;
 
                     const nutrientConcEl = document.getElementById('nutrient-conc');
-                    if (nutrientConcEl) nutrientConcEl.value = data.nutrient_concentration || 1;
+                    if (nutrientConcEl) nutrientConcEl.value = data.nutrient_concentration ?? 1;
 
                     const usbRoles = data.usb_roles || {};
                     populateUsbDevices(usbRoles.valve_relay);
