@@ -248,7 +248,8 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             eventlet.sleep(0.1)  # Tighter loop for responsiveness
 
 def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
-    global stop_feeding_flag
+    global stop_feeding_flag, drain_complete
+    drain_complete = {'status': False, 'reason': None}  # Reset at start
     stop_feeding_flag = False
     with current_app.app_context():
         current_app.config['feeding_sequence_active'] = True
