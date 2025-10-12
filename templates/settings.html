@@ -251,6 +251,7 @@
                         .then(data => {
                             if (data.status === 'success') {
                                 alert('Drain flow settings saved successfully.');
+                                loadSettings();
                             } else {
                                 alert('Failed to save drain flow settings: ' + data.error);
                             }
@@ -259,432 +260,546 @@
                 });
             }
 
-            // Handle discord form
+            // Handle Discord settings form submit
             const discordForm = document.getElementById('discord-form');
             if (discordForm) {
                 discordForm.addEventListener('submit', function(e) {
                     e.preventDefault();
-                    const enabled = document.getElementById('discord-enabled').checked;
-                    const webhook = document.getElementById('discord-webhook-url').value.trim();
+                    const discordEnabled = document.getElementById('discord-enabled')?.checked;
+                    const discordWebhookUrl = document.getElementById('discord-webhook-url')?.value.trim();
                     fetch('/api/settings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ discord_enabled: enabled, discord_webhook_url: webhook })
+                        body: JSON.stringify({
+                            discord_enabled: discordEnabled,
+                            discord_webhook_url: discordWebhookUrl
+                        })
                     })
                         .then(response => response.json())
                         .then(data => {
                             if (data.status === 'success') {
-                                alert('Discord settings saved.');
+                                alert('Discord settings saved successfully.');
+                                loadSettings();
                             } else {
                                 alert('Failed to save Discord settings: ' + data.error);
                             }
-                        });
+                        })
+                        .catch(error => console.error('Error saving Discord settings:', error));
                 });
             }
 
-            // Discord test
+            // Handle Discord test message
             const discordTestForm = document.getElementById('discord-test-form');
             if (discordTestForm) {
                 discordTestForm.addEventListener('submit', function(e) {
                     e.preventDefault();
-                    const message = document.getElementById('discord-test-message').value.trim();
-                    fetch('/api/test_discord', {
+                    const testMessage = document.getElementById('discord-test-message')?.value.trim();
+                    if (!testMessage) {
+                        alert('Please enter a test message.');
+                        return;
+                    }
+                    fetch('/api/settings/discord_message', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: message })
+                        body: JSON.stringify({ test_message: testMessage })
                     })
                         .then(response => response.json())
                         .then(data => {
-                            alert(data.message);
-                        });
+                            if (data.status === 'success') {
+                                alert('Test Discord message sent successfully: ' + data.info);
+                            } else {
+                                alert('Failed to send test Discord message: ' + data.error);
+                            }
+                        })
+                        .catch(error => console.error('Error sending test Discord message:', error));
                 });
             }
 
-            // Similar for telegram
-
+            // Handle Telegram settings form submit
             const telegramForm = document.getElementById('telegram-form');
             if (telegramForm) {
                 telegramForm.addEventListener('submit', function(e) {
                     e.preventDefault();
-                    const enabled = document.getElementById('telegram-enabled').checked;
-                    const token = document.getElementById('telegram-bot-token').value.trim();
-                    const chatId = document.getElementById('telegram-chat-id').value.trim();
+                    const telegramEnabled = document.getElementById('telegram-enabled')?.checked;
+                    const telegramBotToken = document.getElementById('telegram-bot-token')?.value.trim();
+                    const telegramChatId = document.getElementById('telegram-chat-id')?.value.trim();
                     fetch('/api/settings', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ telegram_enabled: enabled, telegram_bot_token: token, telegram_chat_id: chatId })
+                        body: JSON.stringify({
+                            telegram_enabled: telegramEnabled,
+                            telegram_bot_token: telegramBotToken,
+                            telegram_chat_id: telegramChatId
+                        })
                     })
                         .then(response => response.json())
                         .then(data => {
                             if (data.status === 'success') {
-                                alert('Telegram settings saved.');
+                                alert('Telegram settings saved successfully.');
+                                loadSettings();
                             } else {
                                 alert('Failed to save Telegram settings: ' + data.error);
                             }
-                        });
+                        })
+                        .catch(error => console.error('Error saving Telegram settings:', error));
                 });
             }
 
+            // Handle Telegram test message
             const telegramTestForm = document.getElementById('telegram-test-form');
             if (telegramTestForm) {
                 telegramTestForm.addEventListener('submit', function(e) {
                     e.preventDefault();
-                    const message = document.getElementById('telegram-test-message').value.trim();
-                    fetch('/api/test_telegram', {
+                    const testMessage = document.getElementById('telegram-test-message')?.value.trim();
+                    if (!testMessage) {
+                        alert('Please enter a test message.');
+                        return;
+                    }
+                    fetch('/api/settings/telegram_message', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: message })
-                    })
-                        .then(response => response.json())
-                        .then(data => {
-                            alert(data.message);
-                        });
-                });
-            }
-
-            // Relay on/off
-            function turnOnRelay(relay) {
-                fetch('/api/valve_relay/on', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ relay: relay })
-                });
-            }
-
-            function turnOffRelay(relay) {
-                fetch('/api/valve_relay/off', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ relay: relay })
-                });
-            }
-
-            // Feed pump on/off
-            function turnOnFeedPump() {
-                fetch('/api/feed_pump/on', { method: 'POST' });
-            }
-
-            function turnOffFeedPump() {
-                fetch('/api/feed_pump/off', { method: 'POST' });
-            }
-
-            // Save calibration
-            function saveCalibrationFactors() {
-                const fresh = parseFloat(document.getElementById('fresh-cal').value);
-                const feed = parseFloat(document.getElementById('feed-cal').value);
-                const drain = parseFloat(document.getElementById('drain-cal').value);
-                fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ calibration_factors: { fresh, feed, drain } })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Calibration saved.');
-                        }
-                    });
-            }
-
-            // Save nutrient conc
-            function saveNutrientConcentration() {
-                const conc = parseFloat(document.getElementById('nutrient-conc').value);
-                fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nutrient_concentration: conc })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Nutrient concentration saved.');
-                        }
-                    });
-            }
-
-            // Load settings
-            function loadSettings() {
-                fetch('/api/settings')
-                    .then(response => response.json())
-                    .then(settings => {
-                        // Calibration
-                        document.getElementById('fresh-cal').value = settings.calibration_factors.fresh || '';
-                        document.getElementById('feed-cal').value = settings.calibration_factors.feed || '';
-                        document.getElementById('drain-cal').value = settings.calibration_factors.drain || '';
-
-                        // Nutrient conc
-                        document.getElementById('nutrient-conc').value = settings.nutrient_concentration || 1;
-
-                        // Valve relay device
-                        const select = document.getElementById('valve-relay-device');
-                        select.innerHTML = '<option value="">Select a device</option>';
-                        settings.usb_devices.forEach(device => {
-                            const option = document.createElement('option');
-                            option.value = device;
-                            option.text = device;
-                            if (device === settings.usb_assignments.valve_relay) option.selected = true;
-                            select.appendChild(option);
-                        });
-
-                        // Relay ports
-                        document.getElementById('feed-water-relay-port').value = settings.relay_ports.feed_water || 1;
-                        document.getElementById('fresh-water-relay-port').value = settings.relay_ports.fresh_water || 2;
-
-                        // Feed pump
-                        if (settings.feed_pump.type === 'io') {
-                            document.getElementById('feed-pump-io').checked = true;
-                            document.getElementById('feed-pump-io-number').value = settings.feed_pump.io_number || '';
-                            ipInput.disabled = true;
-                            ioNumberInput.disabled = false;
-                        } else if (settings.feed_pump.type === 'shelly') {
-                            document.getElementById('feed-pump-shelly').checked = true;
-                            document.getElementById('feed-pump-ip').value = settings.feed_pump.ip || '';
-                            ioNumberInput.disabled = true;
-                            ipInput.disabled = false;
-                        }
-
-                        // Drain flow
-                        document.getElementById('activation-flow-rate').value = settings.drain_flow_settings.activation_flow_rate || 0.2;
-                        document.getElementById('min-flow-rate').value = settings.drain_flow_settings.min_flow_rate || 0.05;
-                        document.getElementById('activation-delay').value = settings.drain_flow_settings.activation_delay || 5;
-                        document.getElementById('min-flow-check-delay').value = settings.drain_flow_settings.min_flow_check_delay || 30;
-                        document.getElementById('max-drain-time').value = settings.drain_flow_settings.max_drain_time || 600;
-
-                        // Notifications
-                        document.getElementById('discord-enabled').checked = settings.discord_enabled || false;
-                        document.getElementById('discord-webhook-url').value = settings.discord_webhook_url || '';
-                        document.getElementById('telegram-enabled').checked = settings.telegram_enabled || false;
-                        document.getElementById('telegram-bot-token').value = settings.telegram_bot_token || '';
-                        document.getElementById('telegram-chat-id').value = settings.telegram_chat_id || '';
-
-                        // Application update
-                        document.getElementById('current-version').innerText = settings.version || 'Unknown';
-
-                        // Additional plants
-                        const plantsList = document.getElementById('additional-plants-list');
-                        plantsList.innerHTML = '';
-                        (settings.additional_plants || []).forEach(ip => {
-                            const div = document.createElement('div');
-                            div.innerHTML = `${ip} <button onclick="removeAdditionalPlant('${ip}')">Remove</button>`;
-                            plantsList.appendChild(div);
-                        });
-
-                        // Power controls
-                        renderPowerOutlets(settings.power_controls || []);
-                    })
-                    .catch(error => console.error('Error loading settings:', error));
-            }
-
-            // Add additional plant
-            function addAdditionalPlant() {
-                const ip = document.getElementById('new-plant-ip').value.trim();
-                if (ip) {
-                    fetch('/api/settings', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ additional_plants_add: ip })
+                        body: JSON.stringify({ test_message: testMessage })
                     })
                         .then(response => response.json())
                         .then(data => {
                             if (data.status === 'success') {
-                                loadSettings();
+                                alert('Test Telegram message sent successfully: ' + data.info);
+                            } else {
+                                alert('Failed to send test Telegram message: ' + data.error);
                             }
-                        });
-                }
-            }
-
-            // Remove additional plant
-            function removeAdditionalPlant(ip) {
-                fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ additional_plants_remove: ip })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            loadSettings();
-                        }
-                    });
-            }
-
-            // Power outlets
-            function renderPowerOutlets(power_controls) {
-                const list = document.getElementById('power-outlets-list');
-                list.innerHTML = '';
-                power_controls.forEach(outlet => {
-                    const card = document.createElement('div');
-                    card.className = 'data-box';
-                    card.innerHTML = `
-                        <p>IP: ${outlet.ip}</p>
-                        <label>Assigned Valves:</label>
-                        <select id="valves-${outlet.ip}" multiple></select>
-                        <button class="small-btn" onclick="saveValveAssignment('${outlet.ip}')">Save</button>
-                        <button class="small-btn stop-btn" onclick="removePowerOutlet('${outlet.ip}')">Remove</button>
-                    `;
-                    list.appendChild(card);
-
-                    retrieveValvesFromIP(outlet.ip).then(valves => {
-                        const select = document.getElementById(`valves-${outlet.ip}`);
-                        valves.forEach(v => {
-                            const option = document.createElement('option');
-                            option.value = v;
-                            option.text = v;
-                            if (outlet.valves.includes(v)) option.selected = true;
-                            select.appendChild(option);
-                        });
-                    });
+                        })
+                        .catch(error => console.error('Error sending test Telegram message:', error));
                 });
-            }
-
-            function addPowerOutlet() {
-                const ip = document.getElementById('new-outlet-ip').value.trim();
-                if (ip) {
-                    fetch('/api/settings', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ power_controls: [...(settings.power_controls || []), {ip, valves: []}] })
-                    })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === 'success') {
-                                alert('Outlet added.');
-                                loadSettings();
-                            }
-                        });
-                }
-            }
-
-            function removePowerOutlet(ip) {
-                fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ power_controls_remove: ip })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            loadSettings();
-                        }
-                    });
-            }
-
-            function retrieveValvesFromIP(ip) {
-                return fetch(`/retrieve_valves?ip=${ip}`)
-                    .then(response => response.json())
-                    .then(data => data.valves || [])
-                    .catch(() => []);
-            }
-
-            function saveValveAssignment(ip) {
-                const select = document.getElementById(`valves-${ip}`);
-                const valves = Array.from(select.selectedOptions).map(opt => opt.value);
-                fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ power_controls_update: {ip, valves} })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Valve assignment saved.');
-                        }
-                    });
-            }
-
-            // Check for update
-            function checkForUpdate() {
-                const modal = document.getElementById('update-modal');
-                const overlay = document.getElementById('overlay');
-                const progress = document.getElementById('update-progress');
-                const title = document.getElementById('update-title');
-                const closeBtn = document.getElementById('close-modal');
-
-                title.innerText = 'Checking for Update...';
-                progress.innerHTML = '';
-                modal.style.display = 'block';
-                overlay.style.display = 'block';
-                closeBtn.style.display = 'none';
-
-                fetch('/api/check_update')
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.update_available) {
-                            title.innerText = 'Update Available';
-                            progress.innerHTML = 'Starting update...<br>';
-                            performUpdate();
-                        } else {
-                            title.innerText = 'No Update Available';
-                            progress.innerHTML = 'Your application is up to date.';
-                            closeBtn.style.display = 'block';
-                        }
-                    })
-                    .catch(error => {
-                        title.innerText = 'Error Checking for Update';
-                        progress.innerHTML = error;
-                        closeBtn.style.display = 'block';
-                    });
-            }
-
-            function performUpdate() {
-                const progress = document.getElementById('update-progress');
-                fetch('/api/update', { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        progress.innerHTML += data.message + '<br>';
-                        if (data.status === 'success') {
-                            progress.innerHTML += 'Update complete. Reloading...';
-                            setTimeout(() => location.reload(), 2000);
-                        }
-                    })
-                    .catch(error => {
-                        progress.innerHTML += 'Error: ' + error + '<br>';
-                    });
-            }
-
-            function closeUpdateModal() {
-                document.getElementById('update-modal').style.display = 'none';
-                document.getElementById('overlay').style.display = 'none';
-            }
-
-            // Save USB assignment
-            function saveUsbAssignment(type, device) {
-                fetch('/api/assign_usb', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: type, device: device })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('USB assigned successfully.');
-                            loadSettings();
-                        } else {
-                            alert('Failed to assign USB: ' + data.error);
-                        }
-                    });
             }
         });
+
+        // Function to check for updates
+        function checkForUpdate() {
+            document.getElementById('update-status').innerText = 'Checking...';
+            fetch('/api/settings/check_update')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        if (data.update_available) {
+                            document.getElementById('update-status').innerText = 'Update available';
+                            if (confirm('An update is available. Do you want to apply it?')) {
+                                applyUpdate();
+                            }
+                        } else {
+                            document.getElementById('update-status').innerText = 'No update available';
+                        }
+                    } else {
+                        document.getElementById('update-status').innerText = 'Error: ' + data.error;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('update-status').innerText = 'Error checking for update';
+                    console.error('Error:', error);
+                });
+        }
+
+        // Function to apply update
+        function applyUpdate() {
+            const modal = document.getElementById('update-modal');
+            const progress = document.getElementById('update-progress');
+            const title = document.getElementById('update-title');
+            const overlay = document.getElementById('overlay');
+            const closeBtn = document.getElementById('close-modal');
+
+            modal.style.display = 'block';
+            overlay.style.display = 'block';
+            closeBtn.style.display = 'none';
+            title.textContent = 'Applying update...';
+            progress.textContent = 'Please wait...';
+
+            fetch('/api/settings/apply_update', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        progress.textContent = 'Update complete. The application will restart.';
+                        title.textContent = 'Update Successful!';
+                        closeBtn.style.display = 'inline-block';
+                        closeBtn.textContent = 'Close & Reload';
+                    } else {
+                        progress.textContent = 'Update failed: ' + data.error;
+                        title.textContent = 'Update Failed';
+                        closeBtn.style.display = 'inline-block';
+                        closeBtn.textContent = 'Close';
+                    }
+                })
+                .catch(error => {
+                    progress.textContent = 'Error applying update: ' + error;
+                    title.textContent = 'Update Error';
+                    closeBtn.style.display = 'inline-block';
+                    closeBtn.textContent = 'Close';
+                });
+        }
+
+        // Function to close modal
+        function closeUpdateModal() {
+            const modal = document.getElementById('update-modal');
+            const overlay = document.getElementById('overlay');
+            if (document.getElementById('update-title').textContent === 'Update Successful!') {
+                modal.style.display = 'none';
+                overlay.style.display = 'none';
+                setTimeout(() => {
+                    window.location.href = window.location.href; // Force reload after modal closes
+                }, 100); // Brief delay to ensure modal hides first
+            } else {
+                modal.style.display = 'none';
+                overlay.style.display = 'none';
+            }
+        }
+
+        function loadSettings() {
+            fetch('/api/settings')
+                .then(response => response.json())
+                .then(data => {
+                    const plantsList = document.getElementById('additional-plants-list');
+                    if (plantsList) {
+                        plantsList.innerHTML = '';
+                        data.additional_plants.forEach((plant, index) => {
+                            const div = document.createElement('div');
+                            div.className = 'valve-rename-cell';
+                            div.innerHTML = `
+                                <input type="text" value="${plant}" disabled>
+                                <button class="small-btn secondary-btn" onclick="removePlant(${index})">Remove</button>
+                            `;
+                            plantsList.appendChild(div);
+                        });
+                    }
+
+                    data.calibration_factors = data.calibration_factors || {};
+                    const freshCal = document.getElementById('fresh-cal');
+                    if (freshCal) freshCal.value = data.calibration_factors.fresh || 28.390575;
+                    const feedCal = document.getElementById('feed-cal');
+                    if (feedCal) feedCal.value = data.calibration_factors.feed || 28.390575;
+                    const drainCal = document.getElementById('drain-cal');
+                    if (drainCal) drainCal.value = data.calibration_factors.drain || 28.390575;
+
+                    const relayPorts = data.relay_ports || { feed_water: 1, fresh_water: 2 };
+                    const feedPortEl = document.getElementById('feed-water-relay-port');
+                    if (feedPortEl) feedPortEl.value = relayPorts.feed_water;
+                    const freshPortEl = document.getElementById('fresh-water-relay-port');
+                    if (freshPortEl) freshPortEl.value = relayPorts.fresh_water;
+
+                    const nutrientConcEl = document.getElementById('nutrient-conc');
+                    if (nutrientConcEl) nutrientConcEl.value = data.nutrient_concentration || 1;
+
+                    const usbRoles = data.usb_roles || {};
+                    populateUsbDevices(usbRoles.valve_relay);
+
+                    loadRelayStatuses();
+
+                    const feedPumpIp = document.getElementById('feed-pump-ip');
+                    const feedPumpIoNumber = document.getElementById('feed-pump-io-number');
+                    const feedPumpIo = document.getElementById('feed-pump-io');
+                    const feedPumpShelly = document.getElementById('feed-pump-shelly');
+                    if (feedPumpIp && feedPumpIoNumber && feedPumpIo && feedPumpShelly) {
+                        const feedPump = data.feed_pump || {};
+                        feedPumpIp.value = feedPump.ip || '';
+                        feedPumpIoNumber.value = feedPump.io_number || '';
+                        feedPumpIo.checked = feedPump.type === 'io';
+                        feedPumpShelly.checked = feedPump.type === 'shelly';
+                        if (feedPumpIo.checked) {
+                            feedPumpIp.disabled = true;
+                            feedPumpIoNumber.disabled = false;
+                        } else if (feedPumpShelly.checked) {
+                            feedPumpIoNumber.disabled = true;
+                            feedPumpIp.disabled = false;
+                        } else {
+                            feedPumpIp.disabled = true;
+                            feedPumpIoNumber.disabled = true;
+                        }
+                    }
+
+                    const drainFlowSettings = data.drain_flow_settings || {};
+                    const activationFlow = document.getElementById('activation-flow-rate');
+                    if (activationFlow) activationFlow.value = drainFlowSettings.activation_flow_rate !== undefined ? drainFlowSettings.activation_flow_rate : 0.2;
+                    const minFlow = document.getElementById('min-flow-rate');
+                    if (minFlow) minFlow.value = drainFlowSettings.min_flow_rate !== undefined ? drainFlowSettings.min_flow_rate : 0.05;
+                    const activationDelay = document.getElementById('activation-delay');
+                    if (activationDelay) activationDelay.value = drainFlowSettings.activation_delay !== undefined ? drainFlowSettings.activation_delay : 5;
+                    const minFlowCheckDelay = document.getElementById('min-flow-check-delay');
+                    if (minFlowCheckDelay) minFlowCheckDelay.value = drainFlowSettings.min_flow_check_delay !== undefined ? drainFlowSettings.min_flow_check_delay : 30;
+                    const maxDrainTime = document.getElementById('max-drain-time');
+                    if (maxDrainTime) maxDrainTime.value = drainFlowSettings.max_drain_time !== undefined ? drainFlowSettings.max_drain_time : 600;
+
+                    const discordEnabled = document.getElementById('discord-enabled');
+                    if (discordEnabled) discordEnabled.checked = data.discord_enabled || false;
+                    const discordWebhookUrl = document.getElementById('discord-webhook-url');
+                    if (discordWebhookUrl) discordWebhookUrl.value = data.discord_webhook_url || '';
+                    const telegramEnabled = document.getElementById('telegram-enabled');
+                    if (telegramEnabled) telegramEnabled.checked = data.telegram_enabled || false;
+                    const telegramBotToken = document.getElementById('telegram-bot-token');
+                    if (telegramBotToken) telegramBotToken.value = data.telegram_bot_token || '';
+                    const telegramChatId = document.getElementById('telegram-chat-id');
+                    if (telegramChatId) telegramChatId.value = data.telegram_chat_id || '';
+
+                    const currentVersionEl = document.getElementById('current-version');
+                    if (currentVersionEl) currentVersionEl.textContent = data.current_version || 'Unknown';
+                })
+                .catch(error => console.error('Error loading settings:', error));
+        }
+
+        function populateUsbDevices(currentDevice) {
+            fetch('/api/settings/usb_devices')
+                .then(response => response.json())
+                .then(devices => {
+                    const valveDevSelect = document.getElementById('valve-relay-device');
+                    if (valveDevSelect) {
+                        valveDevSelect.innerHTML = '<option value="">Select a device</option>';
+                        devices.forEach(dev => {
+                            const option = document.createElement('option');
+                            option.value = dev.device;
+                            option.textContent = dev.device;
+                            if (option.value === currentDevice) {
+                                option.selected = true;
+                            }
+                            valveDevSelect.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => console.error('Error fetching USB devices:', error));
+        }
+
+        function addAdditionalPlant() {
+            const newIp = document.getElementById('new-plant-ip')?.value.trim();
+            if (!newIp) {
+                alert('Please enter a valid IP or DNS.');
+                return;
+            }
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ additional_plants: [newIp] })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('new-plant-ip').value = '';
+                        loadSettings();
+                    } else {
+                        alert('Failed to add plant: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error adding plant:', error));
+        }
+
+        function removePlant(index) {
+            fetch('/api/settings/remove_plant', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index: index })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        loadSettings();
+                    } else {
+                        alert('Failed to remove plant: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error removing plant:', error));
+        }
+
+        function saveCalibrationFactors() {
+            const fresh = parseFloat(document.getElementById('fresh-cal')?.value);
+            const feed = parseFloat(document.getElementById('feed-cal')?.value);
+            const drain = parseFloat(document.getElementById('drain-cal')?.value);
+
+            if (isNaN(fresh) || isNaN(feed) || isNaN(drain)) {
+                alert('Please enter valid numbers for all calibration factors.');
+                return;
+            }
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ calibration_factors: { fresh, feed, drain } })
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Calibration factors saved successfully.');
+                        loadSettings();
+                    } else {
+                        alert('Failed to save calibration factors: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error saving calibration factors:', error);
+                    alert('Failed to save: ' + error.message);
+                });
+        }
+
+        function saveNutrientConcentration() {
+            const concentration = parseFloat(document.getElementById('nutrient-conc')?.value);
+
+            if (isNaN(concentration)) {
+                alert('Please enter a valid number for nutrient concentration.');
+                return;
+            }
+
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nutrient_concentration: concentration })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Nutrient concentration saved successfully.');
+                        loadSettings();
+                    } else {
+                        alert('Failed to save nutrient concentration: ' + data.error);
+                    }
+                })
+                .catch(error => console.error('Error saving nutrient concentration:', error));
+        }
+
+        function saveUsbAssignment(role, device) {
+            fetch("/api/settings/assign_usb", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role, device })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert(`${role} assigned successfully.`);
+                        loadSettings();
+                    } else {
+                        alert(`Failed to assign ${role}: ${data.error}`);
+                    }
+                })
+                .catch(error => console.error(`Error assigning ${role}:`, error));
+        }
+
+        function turnOnRelay(relayId) {
+            fetch(`/api/valve_relay/${relayId}/on`, { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateRelayButton(relayId, 'on');
+                    } else {
+                        console.error(`Failed to turn on relay ${relayId}: ${data.error}`);
+                    }
+                })
+                .catch(error => console.error(`Error turning on relay ${relayId}:`, error));
+        }
+
+        function turnOffRelay(relayId) {
+            fetch(`/api/valve_relay/${relayId}/off`, { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateRelayButton(relayId, 'off');
+                    } else {
+                        console.error(`Failed to turn off relay ${relayId}: ${data.error}`);
+                    }
+                })
+                .catch(error => console.error(`Error turning off relay ${relayId}:`, error));
+        }
+
+        function loadRelayStatuses() {
+            [1, 2].forEach(relayId => {
+                fetch(`/api/valve_relay/${relayId}/status`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            updateRelayButton(relayId, data.relay_status);
+                        }
+                    })
+                    .catch(error => console.error(`Error fetching status for relay ${relayId}:`, error));
+            });
+        }
+
+        function updateRelayButton(relayId, status) {
+            const onButton = document.getElementById(`relay-${relayId}-on`);
+            const offButton = document.getElementById(`relay-${relayId}-off`);
+            if (status === 'on') {
+                onButton.classList.add('active');
+                offButton.classList.remove('active');
+            } else {
+                onButton.classList.remove('active');
+                offButton.classList.add('active');
+            }
+        }
+
+        function turnOnFeedPump() {
+            fetch('/api/feed_pump/on', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        console.error('Failed to turn on feed pump:', data.error);
+                    } else {
+                        updateFeedPumpButton('on');
+                    }
+                })
+                .catch(error => console.error('Error turning on feed pump:', error));
+        }
+
+        function turnOffFeedPump() {
+            fetch('/api/feed_pump/off', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        console.error('Failed to turn off feed pump:', data.error);
+                    } else {
+                        updateFeedPumpButton('off');
+                    }
+                })
+                .catch(error => console.error('Error turning off feed pump:', error));
+        }
+
+        function updateFeedPumpButton(status) {
+            const onButton = document.getElementById('feed-pump-on');
+            const offButton = document.getElementById('feed-pump-off');
+            if (onButton && offButton) {
+                if (status === 'on') {
+                    onButton.classList.add('active');
+                    offButton.classList.remove('active');
+                } else {
+                    onButton.classList.remove('active');
+                    offButton.classList.add('active');
+                }
+            }
+        }
     </script>
 </head>
 <body>
     <nav>
         <ul>
             <li><a href="/">Home</a></li>
+            <li><a href="/nutrient_calculator">Nutrient Calculator</a></li>
             <li><a href="/settings" class="active">Settings</a></li>
             <li><a href="/debug">Debug</a></li>
             <li><a href="/logs">Logs</a></li>
         </ul>
     </nav>
 
-    <div id="update-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1e1e1e; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 1000; max-width: 80%; max-height: 80%; overflow-y: auto;">
-        <h3 id="update-title">Updating Application...</h3>
-        <div id="update-progress" style="margin: 10px 0; font-family: monospace; white-space: pre-wrap;"></div>
-        <button id="close-modal" onclick="closeUpdateModal()" style="display: none;">Close</button>
-    </div>
-    <div id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999;"></div>
-
     <main>
+        <!-- Progress Modal for Updates -->
+        <div id="update-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #333; color: #fff; padding: 20px; border: 1px solid #555; box-shadow: 0 4px 8px rgba(0,0,0,0.3); z-index: 1000; max-width: 80%; max-height: 80%; overflow-y: auto;">
+            <h3 id="update-title">Updating Application...</h3>
+            <div id="update-progress" style="margin: 10px 0; font-family: monospace; white-space: pre-wrap;"></div>
+            <button id="close-modal" onclick="closeUpdateModal()" style="display: none;">Close</button>
+        </div>
+        <div id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999;"></div>
+
         <h1>Settings</h1>
         <p class="subtitle">Configure your flow meter monitor.</p>
 
@@ -795,18 +910,6 @@
             <br>
             <button id="feed-pump-on" class="small-btn relay-button" onclick="turnOnFeedPump()">On</button>
             <button id="feed-pump-off" class="small-btn relay-button" onclick="turnOffFeedPump()">Off</button>
-        </div>
-
-        <div class="data-container">
-            <h3>Power Controls</h3>
-            <div id="power-outlets-list">
-                <!-- Populated by JS -->
-            </div>
-            <p>New Outlet IP:</p>
-            <div class="valve-rename-cell">
-                <input type="text" id="new-outlet-ip" placeholder="e.g., 192.168.1.100">
-                <button class="small-btn" onclick="addPowerOutlet()">+ Add</button>
-            </div>
         </div>
 
         <div class="data-container">
