@@ -99,6 +99,15 @@ def register_blueprints():
 # Call register_blueprints after app setup
 register_blueprints()
 
+# Load and set calibration factors from settings.json after blueprints are registered
+calibration_factors = app.config['settings'].get('calibration_factors', {})
+from api.fresh_flow import set_calibration_factor as set_fresh_cf
+from api.feed_flow import set_calibration_factor as set_feed_cf
+from api.drain_flow import set_calibration_factor as set_drain_cf
+set_fresh_cf(calibration_factors.get('fresh', 28.390575))
+set_feed_cf(calibration_factors.get('feed', 28.390575))
+set_drain_cf(calibration_factors.get('drain', 28.390575))
+
 # Pass app instance to feeding_service
 from services.feeding_service import initialize_feeding_service
 initialize_feeding_service(app, socketio)

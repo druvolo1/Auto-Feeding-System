@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from services.feed_flow_service import get_total_volume, reset_total
+from services.feed_flow_service import get_total_volume, reset_total, set_calibration_factor as service_set_calibration_factor
 
 feed_flow_blueprint = Blueprint('feed_flow', __name__)
 
@@ -10,7 +10,7 @@ def set_calibration_factor(new_factor):
     if not isinstance(new_factor, (int, float)) or new_factor <= 0:
         raise ValueError("Calibration factor must be a positive number")
     calibration_factor = float(new_factor)
-    # TODO: If needed, propagate to service layer or hardware
+    service_set_calibration_factor(new_factor)  # Propagate to service layer
 
 @feed_flow_blueprint.route('/reset', methods=['POST'])
 def reset():
