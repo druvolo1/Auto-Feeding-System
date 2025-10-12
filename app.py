@@ -293,66 +293,67 @@ def monitor_remote_plants():
 
 def broadcast_plants_status():
     while True:
-        try:
-            settings = load_settings()
-            additional_plants = settings.get('additional_plants', [])
-            
-            with plant_lock:
-                aggregated = {'plants': []}
+        with app.app_context():  # Push app context for current_app access
+            try:
+                settings = load_settings()
+                additional_plants = settings.get('additional_plants', [])
                 
-                for plant_ip in additional_plants:
-                    resolved_ip = standardize_host_ip(plant_ip)
-                    plant_data_entry = plant_data.get(plant_ip, {})
-                    is_online = plant_data_entry.get('is_online', False) if plant_ip in plant_clients else False
-                    if plant_ip in plant_data and plant_data[plant_ip].get('last_update'):
-                        plant_data[plant_ip]['ip'] = resolved_ip or plant_ip
-                        plant_data[plant_ip]['original_host'] = plant_ip  # Add original_host
-                        aggregated['plants'].append(plant_data[plant_ip])
-                    else:
-                        aggregated['plants'].append({
-                            'ip': resolved_ip or plant_ip,
-                            'system_name': 'Offline',
-                            'plant_name': 'N/A',
-                            'start_date': 'N/A',
-                            'settings': {
-                                'system_volume': 'N/A',
-                                'allow_remote_feeding': False,
-                                'plant_info': {}
-                            },
-                            'current_ph': None,
-                            'feeding_in_progress': False,
-                            'last_update': None,
-                            'water_level': {},
-                            'valve_info': {
-                                'fill_valve_label': '',
-                                'drain_valve_label': '',
-                                'valve_relays': {},
-                                'fill_valve_ip': '',
-                                'fill_valve': '',
-                                'drain_valve_ip': '',
-                                'drain_valve': ''
-                            },
-                            'is_online': is_online,
-                            'original_host': plant_ip  # Add original_host
-                        })
+                with plant_lock:
+                    aggregated = {'plants': []}
+                    
+                    for plant_ip in additional_plants:
+                        resolved_ip = standardize_host_ip(plant_ip)
+                        plant_data_entry = plant_data.get(plant_ip, {})
+                        is_online = plant_data_entry.get('is_online', False) if plant_ip in plant_clients else False
+                        if plant_ip in plant_data and plant_data[plant_ip].get('last_update'):
+                            plant_data[plant_ip]['ip'] = resolved_ip or plant_ip
+                            plant_data[plant_ip]['original_host'] = plant_ip  # Add original_host
+                            aggregated['plants'].append(plant_data[plant_ip])
+                        else:
+                            aggregated['plants'].append({
+                                'ip': resolved_ip or plant_ip,
+                                'system_name': 'Offline',
+                                'plant_name': 'N/A',
+                                'start_date': 'N/A',
+                                'settings': {
+                                    'system_volume': 'N/A',
+                                    'allow_remote_feeding': False,
+                                    'plant_info': {}
+                                },
+                                'current_ph': None,
+                                'feeding_in_progress': False,
+                                'last_update': None,
+                                'water_level': {},
+                                'valve_info': {
+                                    'fill_valve_label': '',
+                                    'drain_valve_label': '',
+                                    'valve_relays': {},
+                                    'fill_valve_ip': '',
+                                    'fill_valve': '',
+                                    'drain_valve_ip': '',
+                                    'drain_valve': ''
+                                },
+                                'is_online': is_online,
+                                'original_host': plant_ip  # Add original_host
+                            })
+                    
+                    # Set is_currently_feeding based on current_plant_ip
+                    current_plant = current_app.config.get('current_plant_ip')
+                    for p in aggregated['plants']:
+                        p['is_currently_feeding'] = p['original_host'] == current_plant
+                    
+                    current_data = aggregated
+                    
+                    if debug_states.get('plants', False):
+                        print(f"[DEBUG] Emitting plants_update: {len(current_data['plants'])} plants - Data: {current_data}")
+                    socketio.emit('plants_update', current_data, namespace='/status')
                 
-                # Set is_currently_feeding based on current_plant_ip
-                current_plant = current_app.config.get('current_plant_ip')
-                for p in aggregated['plants']:
-                    p['is_currently_feeding'] = p['original_host'] == current_plant
-                
-                current_data = aggregated
-                
+                eventlet.sleep(5)
+            except Exception as e:
                 if debug_states.get('plants', False):
-                    print(f"[DEBUG] Emitting plants_update: {len(current_data['plants'])} plants - Data: {current_data}")
-                socketio.emit('plants_update', current_data, namespace='/status')
-            
-            eventlet.sleep(5)
-        except Exception as e:
-            if debug_states.get('plants', False):
-                print(f"[ERROR] Plants broadcast error: {e}")
-            log_feeding_feedback(f"Plants broadcast error: {str(e)}", status='error')
-            eventlet.sleep(5)
+                    print(f"[ERROR] Plants broadcast error: {e}")
+                log_feeding_feedback(f"Plants broadcast error: {str(e)}", status='error')
+                eventlet.sleep(5)
 
 def broadcast_local_status():
     while True:
