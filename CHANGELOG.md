@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.83] - 2025-10-15
+- added highlight on index page for which plant in the list is feeding
+- modified draining logic to include the level sensor on the remote system in additiona to train flow. 
+
 ## [1.0.82] - 2025-10-11
 - added Nutrient Calculator
 

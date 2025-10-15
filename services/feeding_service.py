@@ -192,6 +192,19 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
 
     with _app.app_context():  # Wrap the loop in app context
         while True:
+            # Check empty sensor first to align with remote system's stop
+            with current_app.config['plant_lock']:
+                plant_data = current_app.config['plant_data'].get(plant_ip, {})
+                empty_triggered = plant_data.get('water_level', {}).get('empty', {}).get('triggered', False)
+                log_extended_feedback(f"Empty sensor check: triggered={empty_triggered}", plant_ip, 'debug', sio)
+
+            if empty_triggered:
+                log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
+                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)  # Ensure valve is off
+                drain_complete['status'] = True
+                drain_complete['reason'] = 'sensor_triggered'
+                break
+
             if stop_feeding_flag:
                 log_feeding_feedback(f"Feeding interrupted during drain conditions monitoring for plant {plant_ip}", plant_ip, 'error', sio)
                 control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)  # Ensure off on interrupt
@@ -206,22 +219,9 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             if elapsed > max_drain_time:
                 log_feeding_feedback(f"Max drain time {max_drain_time}s reached for {plant_ip}, completing drain", plant_ip, 'warning', sio)
                 send_notification(f"Max drain time reached for {plant_ip} during feeding")
-                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)  # NEW: Turn off valve
+                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
                 drain_complete['status'] = True
                 drain_complete['reason'] = 'timeout'
-                break
-
-            # Check empty sensor
-            with current_app.config['plant_lock']:
-                plant_data = current_app.config['plant_data'].get(plant_ip, {})
-                empty_triggered = plant_data.get('water_level', {}).get('empty', {}).get('triggered', False)
-                log_extended_feedback(f"Empty sensor check: triggered={empty_triggered}", plant_ip, 'debug', sio)
-
-            if empty_triggered:
-                log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
-                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)  # NEW: Turn off valve
-                drain_complete['status'] = True
-                drain_complete['reason'] = 'sensor_triggered'
                 break
 
             # Check low flow, treating None as 0
@@ -236,7 +236,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                 if low_flow_duration >= min_flow_check_delay:
                     log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, 'warning', sio)
                     send_notification(f"Low drain flow detected for {plant_ip} during feeding")
-                    control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)  # NEW: Turn off valve
+                    control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
                     drain_complete['status'] = True
                     drain_complete['reason'] = 'low_flow'
                     break
@@ -261,7 +261,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
 
     settings = load_settings()
     nutrient_concentration = settings.get('nutrient_concentration', 3)
-    print(f"[DEBUG] Loaded nutrient_concentration: {nutrient_concentration}")  # Add this line for console logging
+    print(f"[DEBUG] Loaded nutrient_concentration: {nutrient_concentration}")
     
     additional_plants = settings.get('additional_plants', [])
     log_feeding_feedback(f"Starting feeding sequence with use_fresh={use_fresh}, use_feed={use_feed}. Plants: {additional_plants}", status='info', sio=socketio_instance)
@@ -376,7 +376,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
                     remaining_plants.remove(plant_ip)
                 break
             time.sleep(1)
-            drain_monitor_thread.wait()  # NEW: Wait for the thread to finish updating drain_complete (prevents race conditions)
+            drain_monitor_thread.wait()
 
         if drain_complete['status']:
             log_feeding_feedback(f"Drain complete for plant {plant_ip}. Reason: {drain_complete['reason']}", plant_ip, status='info', sio=socketio_instance)
@@ -547,7 +547,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
         log_feeding_feedback(f"Completed full feeding cycle for all plants.", status='info', sio=socketio_instance)
         send_notification(f"Completed full feeding cycle for all plants: {'; '.join(message) if message else 'All plants processed successfully'}. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
     else:
-        log_feeding_feedback(f"Feedingsequence terminated early.", status='info', sio=socketio_instance)
+        log_feeding_feedback(f"Feeding sequence terminated early.", status='info', sio=socketio_instance)
 
     if not message:
         message.append("No eligible plants processed")
