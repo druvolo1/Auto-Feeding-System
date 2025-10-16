@@ -603,7 +603,7 @@ def stop_feeding_sequence():
             current_app.config['current_plant_ip'] = None
             log_extended_feedback(f"Set feeding_sequence_active to False in stop_feeding_sequence", status='debug')
         plant_clients = current_app.config.get('plant_clients', {})
-        plants_data = current_app.config['plant_data', {})
+        plants_data = current_app.config.get('plant_data', {})  # Fixed syntax here
         message = []
 
         socketio_instance = current_app.config.get('socketio') or current_app.extensions.get('socketio')
