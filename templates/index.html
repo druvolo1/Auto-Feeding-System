@@ -98,10 +98,7 @@
             text-align: center;
         }
         #plants-table td:nth-child(7) {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
+            text-align: center;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
@@ -358,6 +355,8 @@
                 feedingInProgressTd.innerText = isOffline ? 'Offline' : (plant.feeding_in_progress ? 'Yes' : 'No');
                 row.appendChild(feedingInProgressTd);
 
+                // In the renderPlantsTable function, update the allowRemoteTd creation:
+
                 const allowRemoteTd = document.createElement('td');
                 const allowStatus = isOffline ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No');
                 if (isOffline) {
@@ -365,10 +364,14 @@
                 } else {
                     const textSpan = document.createElement('span');
                     textSpan.innerText = allowStatus;
+                    textSpan.style.display = 'inline-block';
+                    textSpan.style.verticalAlign = 'middle';
                     const toggleBtn = document.createElement('button');
                     toggleBtn.innerText = 'Toggle';
                     toggleBtn.className = 'feeding-button';
                     toggleBtn.style.marginLeft = '10px';
+                    toggleBtn.style.display = 'inline-block';
+                    toggleBtn.style.verticalAlign = 'middle';
                     toggleBtn.onclick = function() {
                         toggleRemoteFeeding(plant.ip, plant.settings.allow_remote_feeding);
                     };
