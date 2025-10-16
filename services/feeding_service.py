@@ -608,7 +608,7 @@ def stop_feeding_sequence():
             current_app.config['current_plant_ip'] = None
             log_extended_feedback(f"Set feeding_sequence_active to False in stop_feeding_sequence", status='debug')
         plant_clients = current_app.config.get('plant_clients', {})
-        plants_data = current_app.config.get('plant_data', {})  # Fixed syntax here
+        plants_data = current_app.config.get('plant_data', {})
         message = []
 
         socketio_instance = current_app.config.get('socketio') or current_app.extensions.get('socketio')
@@ -677,11 +677,11 @@ def stop_feeding_sequence():
                 valve_relays = valve_info.get('valve_relays', {})
 
             if drain_valve_ip and drain_valve and valve_relays.get(drain_valve_label, {}).get('status') == 'on':
-                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=socketio_instance)
+                control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=socketio_instance)
                 log_feeding_feedback(f"Turned off drain valve {drain_valve} ({drain_valve_label}) for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
 
             if fill_valve_ip and fill_valve and valve_relays.get(fill_valve_label, {}).get('status') == 'on':
-                control_valve(plant_ip, fill_valve_ip, fill_valve, 'off', sio=socketio_instance)
+                control_valve(plant_ip, fill_valve_ip, fill_valve, fill_valve_label, 'off', sio=socketio_instance)
                 log_feeding_feedback(f"Turned off fill valve {fill_valve} ({fill_valve_label}) for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
 
             message.append(f"Stopped {plant_ip}")
@@ -692,6 +692,6 @@ def stop_feeding_sequence():
     else:
         log_extended_feedback("Stop feeding sequence called but sequence already stopped", status='debug')
         return "Feeding sequence already stopped"
-
+    
 def initiate_local_feeding_support(plant_ip):
     pass  # Placeholder for future logic
