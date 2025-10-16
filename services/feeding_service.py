@@ -80,7 +80,7 @@ def send_notification(alert_text: str):
     from app import send_notification as app_send_notification
     app_send_notification(alert_text)
 
-def control_valve(plant_ip, valve_ip, valve_id, action, sio=None, retries=2, timeout=5):
+def control_valve(plant_ip, valve_ip, valve_id, valve_label, action, sio=None, retries=2, timeout=5):
     """Control a valve (on/off) via the valve_relay API with retries."""
     resolved_valve_ip = standardize_host_ip(valve_ip)
     if not resolved_valve_ip:
@@ -90,9 +90,9 @@ def control_valve(plant_ip, valve_ip, valve_id, action, sio=None, retries=2, tim
     # Check current valve status to avoid redundant calls
     with current_app.config['plant_lock']:
         plant_data = current_app.config['plant_data']
-        valve_status = plant_data.get(plant_ip, {}).get('valve_info', {}).get('valve_relays', {}).get(f"Test {valve_id} {'Fill' if valve_id == '1' else 'Drain'}", {}).get('status', 'unknown')
+        valve_status = plant_data.get(plant_ip, {}).get('valve_info', {}).get('valve_relays', {}).get(valve_label, {}).get('status', 'unknown')
         if valve_status == action.lower():
-            log_extended_feedback(f"Valve {valve_id} already {action} for plant {plant_ip}, skipping control", plant_ip, status='info', sio=sio)
+            log_extended_feedback(f"Valve {valve_label} already {action} for plant {plant_ip}, skipping control", plant_ip, status='info', sio=sio)
             return True
     url = f"http://{resolved_valve_ip}:8000/api/valve_relay/{valve_id}/{action}"
     for attempt in range(retries):
@@ -101,19 +101,19 @@ def control_valve(plant_ip, valve_ip, valve_id, action, sio=None, retries=2, tim
             response.raise_for_status()
             data = response.json()
             if data.get('status') == 'success':
-                log_feeding_feedback(f"Valve {valve_id} turned {action} for plant {plant_ip}", plant_ip, status='success', sio=sio)
+                log_feeding_feedback(f"Valve {valve_label} turned {action} for plant {plant_ip}", plant_ip, status='success', sio=sio)
                 return True
             else:
-                log_feeding_feedback(f"Failed to turn {action} valve {valve_id} for plant {plant_ip}: {data.get('error')}", plant_ip, status='error', sio=sio)
-                send_notification(f"Failed to turn {action} valve {valve_id} for plant {plant_ip}: {data.get('error')}")
+                log_feeding_feedback(f"Failed to turn {action} valve {valve_label} for plant {plant_ip}: {data.get('error')}", plant_ip, status='error', sio=sio)
+                send_notification(f"Failed to turn {action} valve {valve_label} for plant {plant_ip}: {data.get('error')}")
                 return False
         except Exception as e:
-            log_feeding_feedback(f"Error controlling valve {valve_id} for plant {plant_ip} (attempt {attempt+1}/{retries}): {str(e)}", plant_ip, status='error', sio=sio)
+            log_feeding_feedback(f"Error controlling valve {valve_label} for plant {plant_ip} (attempt {attempt+1}/{retries}): {str(e)}", plant_ip, status='error', sio=sio)
             if attempt < retries - 1:
-                log_extended_feedback(f"Retrying valve {valve_id} control for {plant_ip}", plant_ip, status='info', sio=sio)
+                log_extended_feedback(f"Retrying valve {valve_label} control for {plant_ip}", plant_ip, status='info', sio=sio)
                 time.sleep(2)
             else:
-                send_notification(f"Failed to control valve {valve_id} for plant {plant_ip} after {retries} attempts: {str(e)}")
+                send_notification(f"Failed to control valve {valve_label} for plant {plant_ip} after {retries} attempts: {str(e)}")
                 return False
 
 def wait_for_valve_off(plant_ip, valve_ip, valve_id, valve_label, timeout=10, sio=None):
@@ -132,13 +132,13 @@ def wait_for_valve_off(plant_ip, valve_ip, valve_id, valve_label, timeout=10, si
         with current_app.config['plant_lock']:
             plant_data = current_app.config['plant_data']
             valve_status = plant_data.get(plant_ip, {}).get('valve_info', {}).get('valve_relays', {}).get(valve_label, {}).get('status', 'unknown')
-            log_extended_feedback(f"Checking valve {valve_id} ({valve_label}) status: {valve_status}", plant_ip, status='info', sio=sio)
+            log_extended_feedback(f"Checking valve {valve_label} status: {valve_status}", plant_ip, status='info', sio=sio)
             if valve_status == 'off':
-                log_extended_feedback(f"Valve {valve_id} ({valve_label}) confirmed off for plant {plant_ip}", plant_ip, status='success', sio=sio)
+                log_extended_feedback(f"Valve {valve_label} confirmed off for plant {plant_ip}", plant_ip, status='success', sio=sio)
                 return True
         time.sleep(1)
-    log_extended_feedback(f"Timeout waiting for valve {valve_id} ({valve_label}) to turn off for plant {plant_ip}", plant_ip, status='warning', sio=sio)
-    send_notification(f"Timeout waiting for valve {valve_id} ({valve_label}) to turn off for plant {plant_ip}")
+    log_extended_feedback(f"Timeout waiting for valve {valve_label} to turn off for plant {plant_ip}", plant_ip, status='warning', sio=sio)
+    send_notification(f"Timeout waiting for valve {valve_label} to turn off for plant {plant_ip}")
     return False
 
 def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retries=2, sio=None):
