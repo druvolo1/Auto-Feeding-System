@@ -239,15 +239,16 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                 empty_triggered = plant_data.get('water_level', {}).get(empty_sensor, {}).get('triggered', False)
                 log_feeding_feedback(f"Empty sensor check for {plant_ip}: triggered={empty_triggered}", plant_ip, 'info', sio)
 
-            if empty_triggered:
-                log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
-                if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
-                    drain_complete['status'] = True
-                    drain_complete['reason'] = 'sensor_triggered'
-                else:
-                    drain_complete['status'] = False
-                    drain_complete['reason'] = 'valve_off_failed'
-                return
+            # Temporarily disable sensor check to diagnose flow monitoring
+            # if empty_triggered:
+            #     log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
+            #     if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
+            #         drain_complete['status'] = True
+            #         drain_complete['reason'] = 'sensor_triggered'
+            #     else:
+            #         drain_complete['status'] = False
+            #         drain_complete['reason'] = 'valve_off_failed'
+            #     return
 
             if stop_feeding_flag:
                 log_feeding_feedback(f"Feeding interrupted during drain conditions monitoring for plant {plant_ip}", plant_ip, 'error', sio)
@@ -274,7 +275,6 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             log_extended_feedback(f"Current drain flow: {effective_flow}, min={min_flow_rate}, low_flow_start={low_flow_start}", plant_ip, 'debug', sio)
             if effective_flow < min_flow_rate:
                 if low_flow_start is None:
-                    low_flow_start = time.time()
                     log_extended_feedback(f"Low flow started at {low_flow_start}", plant_ip, 'debug', sio)
                 low_flow_duration = time.time() - low_flow_start
                 log_extended_feedback(f"Low flow duration: {low_flow_duration:.2f}s, min={min_flow_check_delay}s", plant_ip, 'debug', sio)
