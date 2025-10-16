@@ -175,7 +175,7 @@ def wait_for_sensor(plant_ip, sensor_key, expected_triggered, timeout=600, retri
     log_extended_feedback(f"Failed waiting for sensor {sensor_label} to change to triggered={expected_triggered} for plant {plant_ip} after {retries} attempts", plant_ip, status='error', sio=sio)
     return False
 
-def monitor_dain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, settings, sio):
+def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, settings, sio):
     global drain_complete, stop_feeding_flag
     drain_settings = settings.get('drain_flow_settings', {})
     activation_delay = drain_settings.get('activation_delay', 5)
