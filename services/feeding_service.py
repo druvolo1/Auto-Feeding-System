@@ -203,24 +203,27 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                 log_feeding_feedback(f"Empty sensor check on None flow for {plant_ip}: triggered={empty_triggered}", plant_ip, 'info', sio)
             if empty_triggered:
                 log_feeding_feedback(f"Empty sensor triggered on initial flow check for {plant_ip}, completing drain", plant_ip, 'success', sio)
-                if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
-                    drain_complete['status'] = True
-                    drain_complete['reason'] = 'sensor_triggered'
-                else:
-                    drain_complete['status'] = False
-                    drain_complete['reason'] = 'valve_off_failed'
+                with current_app.app_context():  # Ensure context for control_valve
+                    if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
+                        drain_complete['status'] = True
+                        drain_complete['reason'] = 'sensor_triggered'
+                    else:
+                        drain_complete['status'] = False
+                        drain_complete['reason'] = 'valve_off_failed'
                 return
             time.sleep(1)
         log_feeding_feedback(f"Initial drain flow None and empty sensor not triggered for {plant_ip}, aborting drain", plant_ip, 'error', sio)
         send_notification(f"Drain activation flow check failed for {plant_ip}: no flow detected")
-        control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
+        with current_app.app_context():  # Ensure context for control_valve
+            control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
         drain_complete['status'] = False
         drain_complete['reason'] = 'no_flow'
         return
     elif initial_flow < activation_flow_rate:
         log_feeding_feedback(f"Initial drain flow {initial_flow} below activation threshold {activation_flow_rate} Gal/min for {plant_ip}, aborting drain", plant_ip, 'error', sio)
         send_notification(f"Drain activation flow check failed for {plant_ip}")
-        control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
+        with current_app.app_context():  # Ensure context for control_valve
+            control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
         drain_complete['status'] = False
         drain_complete['reason'] = 'no_activation_flow'
         return
@@ -230,7 +233,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
     start_time = time.time()  # Start timeout clock after activation delay
     low_flow_start = None
 
-    with _app.app_context():  # Wrap the loop in app context
+    with current_app.app_context():  # Wrap the loop in app context
         while True:
             # Check empty sensor first to align with remote system's stop
             with current_app.config['plant_lock']:
@@ -291,6 +294,101 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
 
             eventlet.sleep(0.1)  # Tighter loop for responsiveness
 
+def stop_feeding_sequence():
+    """Stop the feeding sequence by emitting stop_feeding and turning off active valves."""
+    global stop_feeding_flag
+    if current_app.config.get('feeding_sequence_active', False):
+        stop_feeding_flag = True
+        with current_app.app_context():
+            current_app.config['feeding_sequence_active'] = False
+            current_app.config['current_feeding_phase'] = 'idle'
+            current_app.config['current_plant_ip'] = None
+            log_extended_feedback(f"Set feeding_sequence_active to False in stop_feeding_sequence", status='debug')
+        plant_clients = current_app.config.get('plant_clients', {})
+        plants_data = current_app.config.get('plant_data', {})
+        message = []
+
+        socketio_instance = current_app.config.get('socketio') or current_app.extensions.get('socketio')
+        log_feeding_feedback("Stopping feeding sequence for all plants", status='info', sio=socketio_instance)
+        send_notification("Stopping feeding sequence for all plants")
+        socketio_instance.emit('feeding_sequence_state', {'active': False}, namespace='/status')
+
+        # Clean up local relays and pump
+        from utils.settings_utils import load_settings
+        from services.feed_pump_service import control_feed_pump
+        settings = load_settings()
+        feed_relay = settings.get('relay_ports', {}).get('feed_water')
+        fresh_relay = settings.get('relay_ports', {}).get('fresh_water')
+
+        def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'):
+            url = f"http://127.0.0.1:8000/api/valve_relay/{relay_id}/{action}"
+            try:
+                response = requests.post(url, timeout=5)
+                response.raise_for_status()
+                data = response.json()
+                if data.get('status') == 'success':
+                    log_feeding_feedback(f"Local relay {relay_id} turned {action}", plant_ip, status, sio)
+                    return True
+                else:
+                    log_feeding_feedback(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}", plant_ip, 'error', sio)
+                    send_notification(f"Failed to turn {action} local relay {relay_id}: {data.get('error')}")
+                    return False
+            except Exception as e:
+                log_feeding_feedback(f"Error controlling local relay {relay_id}: {str(e)}", plant_ip, 'error', sio)
+                send_notification(f"Error controlling local relay {relay_id}: {str(e)}")
+                return False
+
+        if feed_relay:
+            control_local_relay(feed_relay, 'off', socketio_instance)
+        if fresh_relay:
+            control_local_relay(fresh_relay, 'off', socketio_instance)
+        control_feed_pump(state=0)
+        log_feeding_feedback("Turned off local feed pump and relays", status='info', sio=socketio_instance)
+
+        for plant_ip in plant_clients:
+            if plant_ip not in plant_clients or not plant_clients[plant_ip].connected:
+                continue
+
+            resolved_plant_ip = standardize_host_ip(plant_ip)
+            if not resolved_plant_ip:
+                log_feeding_feedback(f"Failed to resolve plant IP {plant_ip} for stop", plant_ip, status='error', sio=socketio_instance)
+                send_notification(f"Failed to resolve plant IP {plant_ip} for stop")
+                continue
+
+            try:
+                plant_clients[plant_ip].emit('stop_feeding', namespace='/status')
+                log_extended_feedback(f"Emitted stop_feeding for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
+            except Exception as e:
+                log_extended_feedback(f"Failed to emit stop_feeding for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
+                send_notification(f"Failed to emit stop_feeding for plant {plant_ip}: {str(e)}")
+
+            with current_app.config['plant_lock']:
+                plant_data = plants_data.get(plant_ip, {})
+                valve_info = plant_data.get('valve_info', {})
+                drain_valve_ip = valve_info.get('drain_valve_ip')
+                drain_valve = valve_info.get('drain_valve')
+                drain_valve_label = valve_info.get('drain_valve_label')
+                fill_valve_ip = valve_info.get('fill_valve_ip')
+                fill_valve = valve_info.get('fill_valve')
+                fill_valve_label = valve_info.get('fill_valve_label')
+                valve_relays = valve_info.get('valve_relays', {})
+
+            if drain_valve_ip and drain_valve and valve_relays.get(drain_valve_label, {}).get('status') == 'on':
+                control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=socketio_instance)
+                log_feeding_feedback(f"Turned off drain valve {drain_valve} ({drain_valve_label}) for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
+
+            if fill_valve_ip and fill_valve and valve_relays.get(fill_valve_label, {}).get('status') == 'on':
+                control_valve(plant_ip, fill_valve_ip, fill_valve, fill_valve_label, 'off', sio=socketio_instance)
+                log_feeding_feedback(f"Turned off fill valve {fill_valve} ({fill_valve_label}) for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
+
+            message.append(f"Stopped {plant_ip}")
+
+        if not message:
+            message.append("No plants were active")
+        return "Feeding stopped: " + "; ".join(message)
+    else:
+        log_extended_feedback("Stop feeding sequence called but sequence already stopped", status='debug')
+        return "Feeding sequence already stopped"
 def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
     global stop_feeding_flag, drain_complete
     drain_complete = {'status': False, 'reason': None}  # Reset at start
