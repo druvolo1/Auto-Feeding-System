@@ -203,7 +203,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                     plant_data = current_app.config['plant_data'].get(plant_ip, {})
                     empty_triggered = plant_data.get('water_level', {}).get(empty_sensor, {}).get('triggered', False)
                     log_feeding_feedback(f"Empty sensor check on None flow for {plant_ip}: triggered={empty_triggered}", plant_ip, 'info', sio)
-                if empty_triggered:
+                if not empty_triggered:
                     log_feeding_feedback(f"Empty sensor triggered on initial flow check for {plant_ip}, completing drain", plant_ip, 'success', sio)
                     if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
                         drain_complete['status'] = True
@@ -239,16 +239,15 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                 empty_triggered = plant_data.get('water_level', {}).get(empty_sensor, {}).get('triggered', False)
                 log_feeding_feedback(f"Empty sensor check for {plant_ip}: triggered={empty_triggered}", plant_ip, 'info', sio)
 
-            # Temporarily disable sensor check to diagnose flow monitoring
-            # if empty_triggered:
-            #     log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
-            #     if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
-            #         drain_complete['status'] = True
-            #         drain_complete['reason'] = 'sensor_triggered'
-            #     else:
-            #         drain_complete['status'] = False
-            #         drain_complete['reason'] = 'valve_off_failed'
-            #     return
+            if not empty_triggered:
+                log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
+                if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
+                    drain_complete['status'] = True
+                    drain_complete['reason'] = 'sensor_triggered'
+                else:
+                    drain_complete['status'] = False
+                    drain_complete['reason'] = 'valve_off_failed'
+                return
 
             if stop_feeding_flag:
                 log_feeding_feedback(f"Feeding interrupted during drain conditions monitoring for plant {plant_ip}", plant_ip, 'error', sio)
@@ -289,7 +288,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             else:
                 if low_flow_start is not None:
                     log_extended_feedback(f"Flow recovered above threshold, resetting low_flow_start", plant_ip, 'debug', sio)
-                low_flow_start = None
+                    low_flow_start = None
 
             eventlet.sleep(0.1)  # Tighter loop for responsiveness
 
