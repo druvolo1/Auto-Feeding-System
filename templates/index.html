@@ -108,6 +108,7 @@
         }
         #plants-table th:nth-child(7) {
             text-align: center;
+            vertical-align: middle;
         }
         #plants-table td:nth-child(7) {
             display: flex;
@@ -372,17 +373,16 @@
                 feedingInProgressTd.innerText = isOffline ? 'Offline' : (plant.feeding_in_progress ? 'Yes' : 'No');
                 row.appendChild(feedingInProgressTd);
 
-                // In the renderPlantsTable function, update the allowRemoteTd creation:
-
                 const allowRemoteTd = document.createElement('td');
                 const allowStatus = isOffline ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No');
                 const textSpan = document.createElement('span');
                 textSpan.innerText = allowStatus;
+                textSpan.style.marginRight = '10px';
                 allowRemoteTd.appendChild(textSpan);
                 if (!isOffline) {
                     const toggleBtn = document.createElement('button');
                     toggleBtn.innerText = 'Toggle';
-                    toggleBtn.className = 'toggle-button'; // Changed to new unique class
+                    toggleBtn.className = 'toggle-button';
                     toggleBtn.onclick = function() {
                         toggleRemoteFeeding(plant.ip, plant.settings.allow_remote_feeding);
                     };
