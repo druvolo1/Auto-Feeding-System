@@ -275,16 +275,15 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                 if low_flow_start is None:
                     low_flow_start = time.time()
                     log_extended_feedback(f"Low flow started at {low_flow_start}", plant_ip, 'debug', sio)
-                else:
-                    low_flow_duration = time.time() - low_flow_start
-                    log_extended_feedback(f"Low flow duration: {low_flow_duration:.2f}s, min={min_flow_check_delay}s", plant_ip, 'debug', sio)
-                    if low_flow_duration >= min_flow_check_delay:
-                        log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, 'warning', sio)
-                        send_notification(f"Low drain flow detected for {plant_ip} during feeding")
-                        control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
-                        drain_complete['status'] = True
-                        drain_complete['reason'] = 'low_flow'
-                        break
+                low_flow_duration = time.time() - low_flow_start
+                log_extended_feedback(f"Low flow duration: {low_flow_duration:.2f}s, min={min_flow_check_delay}s", plant_ip, 'debug', sio)
+                if low_flow_duration >= min_flow_check_delay:
+                    log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, 'warning', sio)
+                    send_notification(f"Low drain flow detected for {plant_ip} during feeding")
+                    control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
+                    drain_complete['status'] = True
+                    drain_complete['reason'] = 'low_flow'
+                    break
             else:
                 if low_flow_start is not None:
                     log_extended_feedback(f"Flow recovered above threshold, resetting low_flow_start", plant_ip, 'debug', sio)
