@@ -199,7 +199,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                 log_extended_feedback(f"Empty sensor check on None flow: triggered={empty_triggered}", plant_ip, 'debug', sio)
             if empty_triggered:
                 log_feeding_feedback(f"Empty sensor triggered on initial flow check for {plant_ip}, completing drain", plant_ip, 'success', sio)
-                if control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio):
+                if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
                     drain_complete['status'] = True
                     drain_complete['reason'] = 'sensor_triggered'
                 else:
@@ -209,14 +209,14 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             time.sleep(1)
         log_feeding_feedback(f"Initial drain flow None and empty sensor not triggered for {plant_ip}, aborting drain", plant_ip, 'error', sio)
         send_notification(f"Drain activation flow check failed for {plant_ip}: no flow detected")
-        control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
+        control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
         drain_complete['status'] = False
         drain_complete['reason'] = 'no_flow'
         return
     elif initial_flow < activation_flow_rate:
         log_feeding_feedback(f"Initial drain flow {initial_flow} below activation threshold {activation_flow_rate} Gal/min for {plant_ip}, aborting drain", plant_ip, 'error', sio)
         send_notification(f"Drain activation flow check failed for {plant_ip}")
-        control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
+        control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
         drain_complete['status'] = False
         drain_complete['reason'] = 'no_activation_flow'
         return
@@ -236,7 +236,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
 
             if empty_triggered:
                 log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
-                if control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio):
+                if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
                     drain_complete['status'] = True
                     drain_complete['reason'] = 'sensor_triggered'
                 else:
@@ -246,7 +246,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
 
             if stop_feeding_flag:
                 log_feeding_feedback(f"Feeding interrupted during drain conditions monitoring for plant {plant_ip}", plant_ip, 'error', sio)
-                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
+                control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
                 drain_complete['status'] = False
                 drain_complete['reason'] = 'interrupted'
                 break
@@ -258,7 +258,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             if elapsed > max_drain_time:
                 log_feeding_feedback(f"Max drain time {max_drain_time}s reached for {plant_ip}, completing drain", plant_ip, 'warning', sio)
                 send_notification(f"Max drain time reached for {plant_ip} during feeding")
-                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
+                control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
                 drain_complete['status'] = True
                 drain_complete['reason'] = 'timeout'
                 break
@@ -275,7 +275,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                 if low_flow_duration >= min_flow_check_delay:
                     log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, 'warning', sio)
                     send_notification(f"Low drain flow detected for {plant_ip} during feeding")
-                    control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=sio)
+                    control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
                     drain_complete['status'] = True
                     drain_complete['reason'] = 'low_flow'
                     break
@@ -381,7 +381,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
                 send_notification(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}")
             continue
 
-        if not control_valve(plant_ip, drain_valve_ip, drain_valve, 'on', sio=socketio_instance):
+        if not control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'on', sio=socketio_instance):
             message.append(f"Failed {plant_ip}: Drain valve on error")
             if plant_ip in remaining_plants:
                 remaining_plants.remove(plant_ip)
@@ -400,7 +400,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
 
         while not drain_complete['status']:
             if stop_feeding_flag:
-                control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=socketio_instance)
+                control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=socketio_instance)
                 log_feeding_feedback(f"Interrupted drain for {plant_ip}", plant_ip, status='error', sio=socketio_instance)
                 send_notification(f"Interrupted drain for {plant_ip}")
                 message.append(f"Stopped {plant_ip}: Interrupted during drain")
@@ -423,7 +423,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             log_feeding_feedback(f"Drain failed for plant {plant_ip}. Reason: {drain_complete['reason']}", plant_ip, status='error', sio=socketio_instance)
             send_notification(f"Drain failed for plant {plant_ip}. Reason: {drain_complete['reason']}")
             message.append(f"Failed {plant_ip}: Drain error")
-            control_valve(plant_ip, drain_valve_ip, drain_valve, 'off', sio=socketio_instance)
+            control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=socketio_instance)
             if plant_ip in remaining_plants:
                 remaining_plants.remove(plant_ip)
             try:
@@ -438,8 +438,8 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
         drain_complete = {'status': False, 'reason': None}  # Reset for next plant
 
         if not wait_for_valve_off(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, sio=socketio_instance):
-            log_feeding_feedback(f"Failed to confirm drain valve {drain_valve} ({drain_valve_label}) off for {plant_ip}", plant_ip, status='error', sio=socketio_instance)
-            send_notification(f"Failed to confirm drain valve {drain_valve} ({drain_valve_label}) off for {plant_ip}")
+            log_feeding_feedback(f"Failed to confirm drain valve {drain_valve_label} off for {plant_ip}", plant_ip, status='error', sio=socketio_instance)
+            send_notification(f"Failed to confirm drain valve {drain_valve_label} off for {plant_ip}")
             message.append(f"Failed {plant_ip}: Drain valve not off")
             if plant_ip in remaining_plants:
                 remaining_plants.remove(plant_ip)
@@ -473,7 +473,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
                 send_notification(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}")
             continue
 
-        if not control_valve(plant_ip, fill_valve_ip, fill_valve, 'on', sio=socketio_instance):
+        if not control_valve(plant_ip, fill_valve_ip, fill_valve, fill_valve_label, 'on', sio=socketio_instance):
             message.append(f"Failed {plant_ip}: Fill valve on error")
             if plant_ip in remaining_plants:
                 remaining_plants.remove(plant_ip)
@@ -492,7 +492,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             log_feeding_feedback(f"No Full sensor configured for plant {plant_ip}", plant_ip, status='error', sio=socketio_instance)
             send_notification(f"No Full sensor configured for plant {plant_ip}")
             message.append(f"Failed {plant_ip}: No Full sensor")
-            control_valve(plant_ip, fill_valve_ip, fill_valve, 'off', sio=socketio_instance)
+            control_valve(plant_ip, fill_valve_ip, fill_valve, fill_valve_label, 'off', sio=socketio_instance)
             if plant_ip in remaining_plants:
                 remaining_plants.remove(plant_ip)
             try:
@@ -505,7 +505,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
             continue
         log_feeding_feedback(f"Starting wait for Full sensor on {plant_ip}", plant_ip, status='info', sio=socketio_instance)
         if not wait_for_sensor(plant_ip, full_sensor, True, sio=socketio_instance):
-            control_valve(plant_ip, fill_valve_ip, fill_valve, 'off', sio=socketio_instance)
+            control_valve(plant_ip, fill_valve_ip, fill_valve, fill_valve_label, 'off', sio=socketio_instance)
             if stop_feeding_flag:
                 log_feeding_feedback(f"Stopped {plant_ip}: Interrupted during filling", plant_ip, status='error', sio=socketio_instance)
                 send_notification(f"Stopped {plant_ip}: Interrupted during filling. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}")
@@ -536,10 +536,10 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
         log_extended_feedback(f"Emitted fill_complete event for {plant_ip}", plant_ip, status='debug', sio=socketio_instance)
 
         if not wait_for_valve_off(plant_ip, fill_valve_ip, fill_valve, fill_valve_label, sio=socketio_instance):
-            log_feeding_feedback(f"Failed to confirm fill valve {fill_valve} ({fill_valve_label}) off for {plant_ip}", plant_ip, status='error', sio=socketio_instance)
-            send_notification(f"Failed to confirm fill valve {fill_valve} ({fill_valve_label}) off for {plant_ip}")
+            log_feeding_feedback(f"Failed to confirm fill valve {fill_valve_label} off for {plant_ip}", plant_ip, status='error', sio=socketio_instance)
+            send_notification(f"Failed to confirm fill valve {fill_valve_label} off for {plant_ip}")
             message.append(f"Failed {plant_ip}: Fill valve not turned off")
-            control_valve(plant_ip, fill_valve_ip, fill_valve, 'off', sio=socketio_instance)
+            control_valve(plant_ip, fill_valve_ip, fill_valve, fill_valve_label, 'off', sio=socketio_instance)
             if plant_ip in remaining_plants:
                 remaining_plants.remove(plant_ip)
             try:
