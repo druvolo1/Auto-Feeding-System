@@ -157,7 +157,7 @@
     </main>
 
     <script>
-        const socket = io.connect('http://' + document.domain + ':' + location.port + '/status', { transports: ['websocket'] });
+        const socket = io.connect('http://' + document.domain + ':' + '8000' + '/status', { transports: ['websocket'] });
         let feedingSequenceActive = false;
 
         // Connection status handling
@@ -232,7 +232,7 @@
         // Helper function to toggle remote feeding
         function toggleRemoteFeeding(ip, current) {
             const newValue = !current;
-            let url = ip ? `http://${ip}:${location.port}/api/plant_info/` : '/api/plant_info/';
+            let url = ip ? `http://${ip}:8000/api/plant_info/` : '/api/plant_info/';
             fetch(url, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
