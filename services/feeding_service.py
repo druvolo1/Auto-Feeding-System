@@ -220,11 +220,11 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             drain_complete['reason'] = 'no_flow'
             return
         elif initial_flow < activation_flow_rate:
-            log_feeding_feedback(f"Initial drain flow {initial_flow} below activation threshold {activation_flow_rate} Gal/min for {plant_ip}, aborting drain", plant_ip, 'error', sio)
-            send_notification(f"Drain activation flow check failed for {plant_ip}")
+            log_feeding_feedback(f"Initial drain flow {initial_flow} below activation threshold {activation_flow_rate} Gal/min for {plant_ip}, considering bucket empty and proceeding to fill", plant_ip, 'warning', sio)
+            send_notification(f"Initial drain flow low for {plant_ip}, considering empty")
             control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
-            drain_complete['status'] = False
-            drain_complete['reason'] = 'no_activation_flow'
+            drain_complete['status'] = True
+            drain_complete['reason'] = 'low_initial_flow'
             return
 
         log_feeding_feedback(f"Starting flow monitoring for {plant_ip} after activation delay of {activation_delay}s", plant_ip, 'info', sio)
@@ -696,3 +696,4 @@ def stop_feeding_sequence():
 
 def initiate_local_feeding_support(plant_ip):
     pass  # Placeholder for future logic
+</xaiArtifact>
