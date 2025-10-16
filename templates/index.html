@@ -229,6 +229,39 @@
         let lastUpdateCache = {};
         let plantsData = [];
 
+        // Helper function to toggle remote feeding
+        function toggleRemoteFeeding(ip, current) {
+            const newValue = !current;
+            let url = ip ? `http://${ip}:${location.port}/api/plant_info/` : '/api/plant_info/';
+            fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({allow_remote_feeding: newValue})
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to toggle remote feeding');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Toggle success:', data);
+                const feedbackContainer = document.getElementById('feeding-feedback');
+                const message = document.createElement('p');
+                message.className = 'success';
+                message.innerText = `[${new Date().toLocaleString()}] Toggled remote feeding for ${ip || 'local'} to ${newValue ? 'Yes' : 'No'}`;
+                feedbackContainer.prepend(message);
+            })
+            .catch(error => {
+                console.error('Error toggling remote feeding:', error);
+                const feedbackContainer = document.getElementById('feeding-feedback');
+                const message = document.createElement('p');
+                message.className = 'error';
+                message.innerText = `[${new Date().toLocaleString()}] Error toggling remote feeding for ${ip || 'local'}: ${error.message}`;
+                feedbackContainer.prepend(message);
+            });
+        }
+
         // Helper function to render the plants table
         function renderPlantsTable(plants) {
             const plantsTableBody = document.getElementById('plants-table').getElementsByTagName('tbody')[0];
@@ -292,21 +325,52 @@
                     row.classList.add('currently-feeding');
                 }
 
-                const cells = [
-                    plant.system_name || 'Unknown',
-                    plant.plant_name || 'N/A',
-                    isOffline ? 'Offline' : (plant.start_date || 'N/A'),
-                    isOffline ? 'Offline' : (plant.settings?.system_volume || 'N/A'),
-                    isOffline ? 'Offline' : (plant.current_ph !== null ? plant.current_ph : 'N/A'),
-                    isOffline ? 'Offline' : (plant.feeding_in_progress ? 'Yes' : 'No'),
-                    isOffline ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No'),
-                    effectiveLastUpdate ? new Date(effectiveLastUpdate).toLocaleString() : 'N/A'
-                ];
-                cells.forEach(text => {
-                    const td = document.createElement('td');
-                    td.innerText = text;
-                    row.appendChild(td);
-                });
+                const systemNameTd = document.createElement('td');
+                systemNameTd.innerText = plant.system_name || 'Unknown';
+                row.appendChild(systemNameTd);
+
+                const plantNameTd = document.createElement('td');
+                plantNameTd.innerText = plant.plant_name || 'N/A';
+                row.appendChild(plantNameTd);
+
+                const startDateTd = document.createElement('td');
+                startDateTd.innerText = isOffline ? 'Offline' : (plant.start_date || 'N/A');
+                row.appendChild(startDateTd);
+
+                const systemVolumeTd = document.createElement('td');
+                systemVolumeTd.innerText = isOffline ? 'Offline' : (plant.settings?.system_volume || 'N/A');
+                row.appendChild(systemVolumeTd);
+
+                const currentPhTd = document.createElement('td');
+                currentPhTd.innerText = isOffline ? 'Offline' : (plant.current_ph !== null ? plant.current_ph : 'N/A');
+                row.appendChild(currentPhTd);
+
+                const feedingInProgressTd = document.createElement('td');
+                feedingInProgressTd.innerText = isOffline ? 'Offline' : (plant.feeding_in_progress ? 'Yes' : 'No');
+                row.appendChild(feedingInProgressTd);
+
+                const allowRemoteTd = document.createElement('td');
+                const allowStatus = isOffline ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No');
+                if (isOffline) {
+                    allowRemoteTd.innerText = allowStatus;
+                } else {
+                    const textSpan = document.createElement('span');
+                    textSpan.innerText = allowStatus;
+                    const toggleBtn = document.createElement('button');
+                    toggleBtn.innerText = 'Toggle';
+                    toggleBtn.className = 'feeding-button';
+                    toggleBtn.style.marginLeft = '10px';
+                    toggleBtn.onclick = function() {
+                        toggleRemoteFeeding(plant.ip, plant.settings.allow_remote_feeding);
+                    };
+                    allowRemoteTd.appendChild(textSpan);
+                    allowRemoteTd.appendChild(toggleBtn);
+                }
+                row.appendChild(allowRemoteTd);
+
+                const heartbeatTd = document.createElement('td');
+                heartbeatTd.innerText = effectiveLastUpdate ? new Date(effectiveLastUpdate).toLocaleString() : 'N/A';
+                row.appendChild(heartbeatTd);
 
                 sensorKeys.forEach(key => {
                     const sensor = plant.water_level?.[key] || {triggered: false};
@@ -320,11 +384,14 @@
                 const drainLabel = plant.valve_info?.drain_valve_label || "";
                 const fillStatus = isOffline ? 'Offline' : ((plant.valve_info?.valve_relays?.[fillLabel]?.status || "N/A").toUpperCase());
                 const drainStatus = isOffline ? 'Offline' : ((plant.valve_info?.valve_relays?.[drainLabel]?.status || "N/A").toUpperCase());
-                [fillStatus, drainStatus].forEach(text => {
-                    const td = document.createElement('td');
-                    td.innerText = text;
-                    row.appendChild(td);
-                });
+
+                const fillValveTd = document.createElement('td');
+                fillValveTd.innerText = fillStatus;
+                row.appendChild(fillValveTd);
+
+                const drainValveTd = document.createElement('td');
+                drainValveTd.innerText = drainStatus;
+                row.appendChild(drainValveTd);
 
                 const hiddenDiv = document.createElement('div');
                 hiddenDiv.style.display = 'none';
