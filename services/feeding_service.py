@@ -184,6 +184,10 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
     min_flow_check_delay = drain_settings.get('min_flow_check_delay', 30)
     max_drain_time = drain_settings.get('max_drain_time', 300)
 
+    # Verify empty sensor mapping
+    empty_sensor = settings.get('drain_sensor', 'sensor3')
+    log_feeding_feedback(f"Empty sensor mapped to {empty_sensor} for {plant_ip}", plant_ip, 'info', sio)
+
     eventlet.sleep(activation_delay)
 
     # Initial activation flow check with sensor retry
@@ -195,8 +199,8 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
         while time.time() - start_time < 10:
             with current_app.config['plant_lock']:
                 plant_data = current_app.config['plant_data'].get(plant_ip, {})
-                empty_triggered = plant_data.get('water_level', {}).get('empty', {}).get('triggered', False)
-                log_extended_feedback(f"Empty sensor check on None flow: triggered={empty_triggered}", plant_ip, 'debug', sio)
+                empty_triggered = plant_data.get('water_level', {}).get(empty_sensor, {}).get('triggered', False)
+                log_feeding_feedback(f"Empty sensor check on None flow for {plant_ip}: triggered={empty_triggered}", plant_ip, 'info', sio)
             if empty_triggered:
                 log_feeding_feedback(f"Empty sensor triggered on initial flow check for {plant_ip}, completing drain", plant_ip, 'success', sio)
                 if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
@@ -231,8 +235,8 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             # Check empty sensor first to align with remote system's stop
             with current_app.config['plant_lock']:
                 plant_data = current_app.config['plant_data'].get(plant_ip, {})
-                empty_triggered = plant_data.get('water_level', {}).get('empty', {}).get('triggered', False)
-                log_extended_feedback(f"Empty sensor check: triggered={empty_triggered}", plant_ip, 'debug', sio)
+                empty_triggered = plant_data.get('water_level', {}).get(empty_sensor, {}).get('triggered', False)
+                log_feeding_feedback(f"Empty sensor check for {plant_ip}: triggered={empty_triggered}", plant_ip, 'info', sio)
 
             if empty_triggered:
                 log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
@@ -269,7 +273,6 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             log_extended_feedback(f"Current drain flow: {effective_flow}, min={min_flow_rate}, low_flow_start={low_flow_start}", plant_ip, 'debug', sio)
             if effective_flow < min_flow_rate:
                 if low_flow_start is None:
-                    low_flow_start = time.time()
                     log_extended_feedback(f"Low flow started at {low_flow_start}", plant_ip, 'debug', sio)
                 low_flow_duration = time.time() - low_flow_start
                 if low_flow_duration >= min_flow_check_delay:
