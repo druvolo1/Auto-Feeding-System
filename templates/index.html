@@ -16,6 +16,7 @@
             border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
+            vertical-align: middle;
         }
         #plants-table th {
             background-color: #2a2a2a;
@@ -358,25 +359,18 @@
                 feedingInProgressTd.innerText = isOffline ? 'Offline' : (plant.feeding_in_progress ? 'Yes' : 'No');
                 row.appendChild(feedingInProgressTd);
 
-                // In the renderPlantsTable function, update the allowRemoteTd creation:
-
-                // In the renderPlantsTable function, update the allowRemoteTd creation:
-
                 const allowRemoteTd = document.createElement('td');
                 const allowStatus = isOffline ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No');
-                if (isOffline) {
-                    allowRemoteTd.innerText = allowStatus;
-                    allowRemoteTd.style.textAlign = 'center'; // For offline text centering
-                } else {
-                    const textSpan = document.createElement('span');
-                    textSpan.innerText = allowStatus;
+                const textSpan = document.createElement('span');
+                textSpan.innerText = allowStatus;
+                allowRemoteTd.appendChild(textSpan);
+                if (!isOffline) {
                     const toggleBtn = document.createElement('button');
                     toggleBtn.innerText = 'Toggle';
                     toggleBtn.className = 'feeding-button';
                     toggleBtn.onclick = function() {
                         toggleRemoteFeeding(plant.ip, plant.settings.allow_remote_feeding);
                     };
-                    allowRemoteTd.appendChild(textSpan);
                     allowRemoteTd.appendChild(toggleBtn);
                 }
                 row.appendChild(allowRemoteTd);
