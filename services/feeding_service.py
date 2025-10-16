@@ -36,7 +36,6 @@ def initialize_feeding_service(app_instance, socketio_instance):
     _socketio = socketio_instance
 
 def validate_feeding_allowed(plant_ip):
-    """Validate if remote feeding is allowed for the given plant."""
     with current_app.config['plant_lock']:
         plant_data = current_app.config['plant_data']
         if plant_ip in plant_data and plant_data[plant_ip].get('settings', {}).get('allow_remote_feeding', False):
@@ -71,6 +70,7 @@ def log_extended_feedback(message, plant_ip=None, status='debug', sio=None):
     """
     from app import debug_states
     if debug_states.get('feeding-extended-log', False):
+        from .feeding_service import log_feeding_feedback
         log_feeding_feedback(message, plant_ip, status, sio)
 
 def send_notification(alert_text: str):
@@ -277,25 +277,23 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
                 if low_flow_start is None:
                     low_flow_start = time.time()
                     log_extended_feedback(f"Low flow started at {low_flow_start}", plant_ip, 'debug', sio)
-                else:
-                    low_flow_duration = time.time() - low_flow_start
-                    log_extended_feedback(f"Low flow duration: {low_flow_duration:.2f}s, min={min_flow_check_delay}s", plant_ip, 'debug', sio)
-                    if low_flow_duration >= min_flow_check_delay:
-                        log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, 'warning', sio)
-                        send_notification(f"Low drain flow detected for {plant_ip} during feeding")
-                        control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
-                        drain_complete['status'] = True
-                        drain_complete['reason'] = 'low_flow'
-                        break
+                low_flow_duration = time.time() - low_flow_start
+                log_extended_feedback(f"Low flow duration: {low_flow_duration:.2f}s, min={min_flow_check_delay}s", plant_ip, 'debug', sio)
+                if low_flow_duration >= min_flow_check_delay:
+                    log_feeding_feedback(f"Drain flow dropped below {min_flow_rate} Gal/min for {min_flow_check_delay}s after monitoring started, considering bucket empty and proceeding to fill", plant_ip, 'warning', sio)
+                    send_notification(f"Low drain flow detected for {plant_ip} during feeding")
+                    control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
+                    drain_complete['status'] = True
+                    drain_complete['reason'] = 'low_flow'
+                    break
             else:
                 if low_flow_start is not None:
                     log_extended_feedback(f"Flow recovered above threshold, resetting low_flow_start", plant_ip, 'debug', sio)
-                    low_flow_start = None
+                low_flow_start = None
 
             eventlet.sleep(0.1)  # Tighter loop for responsiveness
 
 def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
-    """Start the feeding sequence for all configured plants."""
     global stop_feeding_flag, drain_complete
     drain_complete = {'status': False, 'reason': None}  # Reset at start
     stop_feeding_flag = False
@@ -666,7 +664,7 @@ def stop_feeding_sequence():
                 plant_clients[plant_ip].emit('stop_feeding', namespace='/status')
                 log_extended_feedback(f"Emitted stop_feeding for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
             except Exception as e:
-                log_extended_feedback(f"Failed to emit stop_feeding for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
+                log_feeding_feedback(f"Failed to emit stop_feeding for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
                 send_notification(f"Failed to emit stop_feeding for plant {plant_ip}: {str(e)}")
 
             with current_app.config['plant_lock']:
@@ -698,5 +696,4 @@ def stop_feeding_sequence():
         return "Feeding sequence already stopped"
 
 def initiate_local_feeding_support(plant_ip):
-    """Placeholder for initiating local feeding support."""
-    pass  # Implement as needed
+    pass  # Placeholder for future logic
