@@ -95,9 +95,16 @@
         #plants-table tr.currently-feeding.disconnected {
             background-color: #ff0000; /* Retain red for disconnected */
         }
-        #plants-table th:nth-child(7),
-        #plants-table td:nth-child(7) {
+        #plants-table th:nth-child(7) {
             text-align: center;
+        }
+        #plants-table td:nth-child(7) {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: nowrap;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
@@ -358,19 +365,16 @@
 
                 const allowRemoteTd = document.createElement('td');
                 const allowStatus = isOffline ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No');
-                if (isOffline) {
-                    allowRemoteTd.innerText = allowStatus;
-                } else {
-                    const textSpan = document.createElement('span');
-                    textSpan.innerText = allowStatus;
+                const textSpan = document.createElement('span');
+                textSpan.innerText = allowStatus;
+                allowRemoteTd.appendChild(textSpan);
+                if (!isOffline) {
                     const toggleBtn = document.createElement('button');
                     toggleBtn.innerText = 'Toggle';
                     toggleBtn.className = 'feeding-button';
-                    toggleBtn.style.marginLeft = '10px';
                     toggleBtn.onclick = function() {
                         toggleRemoteFeeding(plant.ip, plant.settings.allow_remote_feeding);
                     };
-                    allowRemoteTd.appendChild(textSpan);
                     allowRemoteTd.appendChild(toggleBtn);
                 }
                 row.appendChild(allowRemoteTd);
