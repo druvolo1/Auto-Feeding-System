@@ -237,7 +237,7 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             with current_app.config['plant_lock']:
                 plant_data = current_app.config['plant_data'].get(plant_ip, {})
                 empty_triggered = plant_data.get('water_level', {}).get(empty_sensor, {}).get('triggered', False)
-                log_feeding_feedback(f"Empty sensor check for {plant_ip}: triggered={empty_triggered}", plant_ip, 'info', sio)
+                log_extended_feedback(f"Empty sensor check for {plant_ip}: triggered={empty_triggered}", plant_ip, 'info', sio)
 
             if not empty_triggered:
                 log_feeding_feedback(f"Empty sensor triggered during drain conditions monitoring for {plant_ip}, completing drain", plant_ip, 'success', sio)
