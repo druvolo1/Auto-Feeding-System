@@ -43,7 +43,7 @@ from services.feed_flow_service import get_latest_flow_rate as get_latest_feed_f
 from services.drain_flow_service import get_latest_flow_rate as get_latest_drain_flow_rate, get_total_volume as get_drain_total_volume, reset_total as reset_drain_total, flow_reader as drain_flow_reader
 from services.valve_relay_service import reinitialize_relay_service, get_relay_status
 from services.feed_level_service import get_feed_level
-from services.log_service import log_event
+from services.log_service import log_event, prune_logs_daily
 from services.feed_mixing_service import monitor_feed_mixing
 
 # Status namespace
@@ -665,6 +665,8 @@ def start_threads():
         eventlet.spawn(plant_watchdog)
         print("[INIT] Starting feed mixing monitor thread...")
         eventlet.spawn(monitor_feed_mixing, socketio, app)  # Pass socketio and app
+        print("[INIT] Starting daily log prune thread...")
+        eventlet.spawn(prune_logs_daily)
     except Exception as e:
         print(f"[ERROR] Failed to start threads: {e}")
         log_feeding_feedback(f"Failed to start threads: {str(e)}", status='error')
