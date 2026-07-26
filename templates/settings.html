@@ -225,8 +225,8 @@
                         alert('Please enter valid numbers for all drain flow settings.');
                         return;
                     }
-                    if (minFlow >= activationFlow) {
-                        alert('Minimum flow rate must be less than activation flow rate.');
+                    if (minFlow > activationFlow) {
+                        alert('Minimum flow rate must not exceed activation flow rate.');
                         return;
                     }
                     if (maxDrainTime <= 0) {

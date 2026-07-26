@@ -32,7 +32,7 @@ def control_local_relay(relay_id, action, sio=None, plant_ip=None, status='info'
         response.raise_for_status()
         data = response.json()
         if data.get('status') == 'success':
-            log_feeding_feedback(f"Local {formatted_name} turned {action}", plant_ip, status, sio)
+            log_extended_feedback(f"Local {formatted_name} turned {action}", plant_ip, status, sio)
             return True
         else:
             log_feeding_feedback(f"Failed to turn {action} local {formatted_name}: {data.get('error')}", plant_ip, 'error', sio)
@@ -107,7 +107,15 @@ def monitor_feed_mixing(socketio, app):
                 settings = load_settings()
                 ratio = settings.get('nutrient_concentration', 1)
                 if ratio <= 0:
-                    ratio = 1  # Prevent division by zero
+                    # nutrient_concentration == 0 means "no nutrient" — skip mixing
+                    # entirely and let the zone's fill valve provide fresh water
+                    # only. Previous behavior fell back to ratio=1, which mixed
+                    # a 50/50 concentrate-to-water solution and drained the
+                    # nutrient reservoir very quickly.
+                    log_feeding_feedback(f"nutrient_concentration={ratio}, skipping feed mixing for {plant_ip} (fresh water only)", plant_ip, 'info', socketio)
+                    mixing_completed = True
+                    eventlet.sleep(0.1)
+                    continue
                 target_feed_volume = system_volume / (ratio + 1)
                 log_feeding_feedback(f"Starting feed mixing for {plant_ip}, target feed volume: {target_feed_volume:.2f} Gal", plant_ip, 'info', socketio)
 
@@ -145,7 +153,7 @@ def monitor_feed_mixing(socketio, app):
 
                 mixed = True
                 components_off = False
-                log_feeding_feedback(f"Feed mixing started for {plant_ip}, mixed={mixed}, components_off={components_off}, mixing_completed={mixing_completed}", plant_ip, 'debug', socketio)
+                log_extended_feedback(f"Feed mixing started for {plant_ip}, mixed={mixed}, components_off={components_off}, mixing_completed={mixing_completed}", plant_ip, 'debug', socketio)
 
                 # Monitor feed total volume and phase
                 while True:

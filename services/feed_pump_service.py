@@ -75,7 +75,6 @@ def control_feed_pump(io_number=None, pump_type='io', state=None, get_status=Fal
             response.raise_for_status()
             action = 'ON' if state == 1 else 'OFF'
             log_feeding_feedback(f"Feed pump turned {action} on Shelly at {ip}", plant_ip, 'success', sio)
-            log_feeding_feedback(f"Feed pump turned {action}", plant_ip, 'success', sio)
             return True
 
     except Exception as e:

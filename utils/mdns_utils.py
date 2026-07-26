@@ -1,5 +1,6 @@
 import socket
 import subprocess
+import time
 from utils.settings_utils import load_settings
 import logging
 import os
@@ -7,6 +8,26 @@ import os
 # Set up basic logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# Short-lived resolution cache. Resolution happens on every broadcast tick and every
+# valve call; without this a slow avahi turns into a per-call subprocess spawn.
+_RESOLVE_CACHE = {}          # hostname -> (ip_or_None, expires_at)
+_RESOLVE_TTL_OK = 60.0       # seconds to trust a successful lookup
+_RESOLVE_TTL_FAIL = 10.0     # seconds before retrying a failed lookup
+AVAHI_TIMEOUT = 3            # seconds; avahi-resolve-host-name can otherwise hang
+
+
+def _cache_get(hostname):
+    entry = _RESOLVE_CACHE.get(hostname)
+    if entry and entry[1] > time.time():
+        return True, entry[0]
+    return False, None
+
+
+def _cache_put(hostname, ip):
+    ttl = _RESOLVE_TTL_OK if ip else _RESOLVE_TTL_FAIL
+    _RESOLVE_CACHE[hostname] = (ip, time.time() + ttl)
+    return ip
 
 def get_local_ip_address():
     """
@@ -42,6 +63,10 @@ def resolve_mdns(hostname: str) -> str:
     if load_settings().get('debug_states', {}).get('dns-resolution', False):
         logger.debug(f"Attempting to resolve hostname: {hostname}")
 
+    cached, cached_ip = _cache_get(hostname)
+    if cached:
+        return cached_ip
+
     # If it's NOT a .local name, skip avahi and do getaddrinfo() + gethostbyname().
     if not hostname.endswith(".local"):
         ip = fallback_socket_resolve(hostname)
@@ -55,7 +80,7 @@ def resolve_mdns(hostname: str) -> str:
             except Exception as e:
                 if load_settings().get('debug_states', {}).get('dns-resolution', False):
                     logger.error(f"gethostbyname failed for {hostname}: {e}")
-        return ip
+        return _cache_put(hostname, ip)
 
     # If it IS a .local, try avahi first:
     try:
@@ -66,19 +91,23 @@ def resolve_mdns(hostname: str) -> str:
                 ["/usr/bin/avahi-resolve-host-name", "-4", hostname],
                 capture_output=True,
                 text=True,
-                check=False
+                check=False,
+                timeout=AVAHI_TIMEOUT
             )
             if result.returncode == 0 and result.stdout.strip():
                 ip_address = result.stdout.strip().split()[-1]
                 if load_settings().get('debug_states', {}).get('dns-resolution', False):
                     logger.debug(f"Resolved {hostname} via avahi: {ip_address}")
-                return ip_address
+                return _cache_put(hostname, ip_address)
             else:
                 if load_settings().get('debug_states', {}).get('dns-resolution', False):
                     logger.warning(f"/usr/bin/avahi-resolve-host-name failed or returned no output for {hostname}: {result.stderr}")
         else:
             if load_settings().get('debug_states', {}).get('dns-resolution', False):
                 logger.error(f"/usr/bin/avahi-resolve-host-name does not exist")
+    except subprocess.TimeoutExpired:
+        if load_settings().get('debug_states', {}).get('dns-resolution', False):
+            logger.error(f"/usr/bin/avahi-resolve-host-name timed out after {AVAHI_TIMEOUT}s for {hostname}")
     except Exception as e:
         if load_settings().get('debug_states', {}).get('dns-resolution', False):
             logger.error(f"/usr/bin/avahi-resolve-host-name error for {hostname}: {e}")
@@ -96,7 +125,7 @@ def resolve_mdns(hostname: str) -> str:
         except Exception as e:
             if load_settings().get('debug_states', {}).get('dns-resolution', False):
                 logger.error(f"gethostbyname failed for {hostname}: {e}")
-    return ip
+    return _cache_put(hostname, ip)
 
 def fallback_socket_resolve(hostname: str) -> str:
     """

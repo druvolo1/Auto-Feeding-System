@@ -35,12 +35,71 @@ def initialize_feeding_service(app_instance, socketio_instance):
     _app = app_instance
     _socketio = socketio_instance
 
-def validate_feeding_allowed(plant_ip):
+def get_live_allow_remote_feeding(plant_ip, timeout=5):
+    """Read allow_remote_feeding straight from the zone over HTTP.
+
+    Returns (value, error). The zone's settings file is the only authority; the
+    socket cache can be stale or frozen.
+    """
+    resolved = standardize_host_ip(plant_ip)
+    if not resolved:
+        return None, 'unresolvable_host'
+    try:
+        response = requests.get(f"http://{resolved}:8000/api/settings/", timeout=timeout)
+        response.raise_for_status()
+        settings = response.json()
+    except Exception as e:
+        return None, f'zone_unreachable: {e}'
+
+    allowed = bool(settings.get('allow_remote_feeding'))
     with current_app.config['plant_lock']:
-        plant_data = current_app.config['plant_data']
-        if plant_ip in plant_data and plant_data[plant_ip].get('settings', {}).get('allow_remote_feeding', False):
+        entry = current_app.config['plant_data'].get(plant_ip)
+        if entry is not None:
+            entry.setdefault('settings', {})['allow_remote_feeding'] = allowed
+    return allowed, None
+
+
+def telemetry_is_fresh(plant_ip, wait_seconds=10):
+    """Force a status refresh and require last_update to actually advance.
+
+    The drain/fill logic reads valve_info and water_level from the socket cache,
+    so a frozen cache must block feeding even when the zone answers HTTP.
+    """
+    plant_data = current_app.config['plant_data']
+    before = (plant_data.get(plant_ip) or {}).get('last_update')
+
+    client = current_app.config.get('plant_clients', {}).get(plant_ip)
+    if client is not None:
+        try:
+            if client.connected:
+                client.emit('request_refresh', namespace='/status')
+        except Exception:
+            pass
+
+    deadline = time.time() + wait_seconds
+    while time.time() < deadline:
+        current = (plant_data.get(plant_ip) or {}).get('last_update')
+        if current and current != before:
             return True
-        return False
+        eventlet.sleep(0.5)
+    return False
+
+
+def validate_feeding_allowed(plant_ip):
+    """Fail-closed gate. Returns (allowed, reason).
+
+    Verifies the permission flag live and requires fresh telemetry before any
+    valve is opened - a stale cache previously authorised feeding a zone the
+    operator had already disabled.
+    """
+    allowed, error = get_live_allow_remote_feeding(plant_ip)
+    if error:
+        return False, error
+    if not allowed:
+        return False, 'remote_feeding_disabled'
+    if not telemetry_is_fresh(plant_ip):
+        return False, 'stale_telemetry'
+    return True, 'ok'
 
 def log_feeding_feedback(message, plant_ip=None, status='info', sio=None):
     """
@@ -80,7 +139,7 @@ def send_notification(alert_text: str):
     from app import send_notification as app_send_notification
     app_send_notification(alert_text)
 
-def control_valve(plant_ip, valve_ip, valve_id, valve_label, action, sio=None, retries=2, timeout=5):
+def control_valve(plant_ip, valve_ip, valve_id, valve_label, action, sio=None, retries=2, timeout=15):
     """Control a valve (on/off) via the valve_relay API with retries."""
     resolved_valve_ip = standardize_host_ip(valve_ip)
     if not resolved_valve_ip:
@@ -101,7 +160,7 @@ def control_valve(plant_ip, valve_ip, valve_id, valve_label, action, sio=None, r
             response.raise_for_status()
             data = response.json()
             if data.get('status') == 'success':
-                log_feeding_feedback(f"Valve {valve_label} turned {action} for plant {plant_ip}", plant_ip, status='success', sio=sio)
+                log_extended_feedback(f"Valve {valve_label} turned {action} for plant {plant_ip}", plant_ip, status='success', sio=sio)
                 return True
             else:
                 log_feeding_feedback(f"Failed to turn {action} valve {valve_label} for plant {plant_ip}: {data.get('error')}", plant_ip, status='error', sio=sio)
@@ -188,21 +247,30 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
 
         # Verify empty sensor mapping
         empty_sensor = settings.get('drain_sensor', 'sensor3')
-        log_feeding_feedback(f"Empty sensor mapped to {empty_sensor} for {plant_ip}", plant_ip, 'info', sio)
+        log_extended_feedback(f"Empty sensor mapped to {empty_sensor} for {plant_ip}", plant_ip, 'info', sio)
 
         eventlet.sleep(activation_delay)
 
-        # Initial activation flow check with sensor retry
-        initial_flow = get_latest_drain_flow_rate()
-        log_extended_feedback(f"Initial drain flow check: {initial_flow}", plant_ip, 'debug', sio)
-        if initial_flow is None:
-            # Retry sensor check for up to 10 seconds to catch WebSocket delay
+        # Initial activation check: use ACCUMULATED drain volume (more robust
+        # than an instantaneous flow sample). The required minimum volume is
+        # derived from activation_flow_rate * activation_delay — i.e. the
+        # average flow over activation_delay must be at least
+        # activation_flow_rate Gal/min.
+        initial_total = get_drain_total_volume()
+        initial_flow  = get_latest_drain_flow_rate()
+        min_initial_volume = (activation_flow_rate or 0) * (activation_delay / 60.0)
+        log_extended_feedback(
+            f"Initial drain check after {activation_delay}s: total={initial_total} gal, "
+            f"flow={initial_flow} Gal/min, min_volume_required={min_initial_volume:.3f} gal",
+            plant_ip, 'debug', sio)
+        if initial_total is None and initial_flow is None:
+            # Drain meter not reporting at all — fall back to the empty-sensor retry path
             start_time = time.time()
             while time.time() - start_time < 10:
                 with current_app.config['plant_lock']:
                     plant_data = current_app.config['plant_data'].get(plant_ip, {})
                     empty_triggered = plant_data.get('water_level', {}).get(empty_sensor, {}).get('triggered', False)
-                    log_feeding_feedback(f"Empty sensor check on None flow for {plant_ip}: triggered={empty_triggered}", plant_ip, 'info', sio)
+                    log_extended_feedback(f"Empty sensor check on None flow for {plant_ip}: triggered={empty_triggered}", plant_ip, 'info', sio)
                 if not empty_triggered:
                     log_feeding_feedback(f"Empty sensor triggered on initial flow check for {plant_ip}, completing drain", plant_ip, 'success', sio)
                     if control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio):
@@ -219,15 +287,19 @@ def monitor_drain_conditions(plant_ip, drain_valve_ip, drain_valve, drain_valve_
             drain_complete['status'] = False
             drain_complete['reason'] = 'no_flow'
             return
-        elif initial_flow < activation_flow_rate:
-            log_feeding_feedback(f"Initial drain flow {initial_flow} below activation threshold {activation_flow_rate} Gal/min for {plant_ip}, considering bucket empty and proceeding to fill", plant_ip, 'warning', sio)
-            send_notification(f"Initial drain flow low for {plant_ip}, considering empty")
+        elif (initial_total or 0) < min_initial_volume:
+            log_feeding_feedback(
+                f"Initial drain volume {initial_total} gal below threshold {min_initial_volume:.3f} gal "
+                f"({activation_flow_rate} Gal/min avg over {activation_delay}s) for {plant_ip}, "
+                f"considering bucket empty and proceeding to fill",
+                plant_ip, 'warning', sio)
+            send_notification(f"Initial drain volume low for {plant_ip}, considering empty")
             control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=sio)
             drain_complete['status'] = True
-            drain_complete['reason'] = 'low_initial_flow'
+            drain_complete['reason'] = 'low_initial_volume'
             return
 
-        log_feeding_feedback(f"Starting flow monitoring for {plant_ip} after activation delay of {activation_delay}s", plant_ip, 'info', sio)
+        log_extended_feedback(f"Starting flow monitoring for {plant_ip} after activation delay of {activation_delay}s", plant_ip, 'info', sio)
 
         start_time = time.time()  # Start timeout clock after activation delay
         low_flow_start = None
@@ -320,7 +392,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
         reset_fresh_total()
         reset_feed_total()
         reset_drain_total()
-        log_feeding_feedback(f"Reset all total volumes for plant {plant_ip}", plant_ip, status='info', sio=socketio_instance)
+        log_extended_feedback(f"Reset all total volumes for plant {plant_ip}", plant_ip, status='info', sio=socketio_instance)
 
         if stop_feeding_flag:
             log_feeding_feedback(f"Stopping sequence early due to interruption. Completed: {', '.join(completed_plants) if completed_plants else 'None'}. Remaining: {', '.join(remaining_plants) if remaining_plants else 'None'}", status='error', sio=socketio_instance)
@@ -336,9 +408,12 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
                 remaining_plants.remove(plant_ip)
             continue
 
-        if not validate_feeding_allowed(plant_ip):
-            log_feeding_feedback(f"Feeding not allowed for plant {plant_ip}", plant_ip, status='warning', sio=socketio_instance)
-            message.append(f"Skipped {plant_ip}: Not allowed")
+        allowed, reason = validate_feeding_allowed(plant_ip)
+        if not allowed:
+            log_feeding_feedback(f"Skipping plant {plant_ip}: {reason}", plant_ip, status='warning', sio=socketio_instance)
+            if reason != 'remote_feeding_disabled':
+                send_notification(f"Skipped {plant_ip} during feeding sequence: {reason}")
+            message.append(f"Skipped {plant_ip}: {reason}")
             if plant_ip in remaining_plants:
                 remaining_plants.remove(plant_ip)
             continue
@@ -458,7 +533,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
                 send_notification(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}")
             continue
 
-        log_feeding_feedback(f"Drain complete for plant {plant_ip}. Drain valve confirmed off.", plant_ip, status='info', sio=socketio_instance)
+        log_extended_feedback(f"Drain complete for plant {plant_ip}. Drain valve confirmed off.", plant_ip, status='info', sio=socketio_instance)
 
         with current_app.app_context():
             current_app.config['current_feeding_phase'] = 'fill'
@@ -509,7 +584,7 @@ def start_feeding_sequence(use_fresh=True, use_feed=True, sio=None):
                 log_feeding_feedback(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}", plant_ip, status='error', sio=socketio_instance)
                 send_notification(f"Failed to reset feeding_in_progress for plant {plant_ip}: {str(e)}")
             continue
-        log_feeding_feedback(f"Starting wait for Full sensor on {plant_ip}", plant_ip, status='info', sio=socketio_instance)
+        log_extended_feedback(f"Starting wait for Full sensor on {plant_ip}", plant_ip, status='info', sio=socketio_instance)
         if not wait_for_sensor(plant_ip, full_sensor, True, sio=socketio_instance):
             control_valve(plant_ip, fill_valve_ip, fill_valve, fill_valve_label, 'off', sio=socketio_instance)
             if stop_feeding_flag:
@@ -649,8 +724,10 @@ def stop_feeding_sequence():
         control_feed_pump(state=0)
         log_feeding_feedback("Turned off local feed pump and relays", status='info', sio=socketio_instance)
 
-        for plant_ip in plant_clients:
-            if plant_ip not in plant_clients or not plant_clients[plant_ip].connected:
+        # Snapshot: the connection watchdog can add or retire clients concurrently.
+        for plant_ip in list(plant_clients.keys()):
+            client = plant_clients.get(plant_ip)
+            if client is None or not client.connected:
                 continue
 
             resolved_plant_ip = standardize_host_ip(plant_ip)
@@ -679,11 +756,11 @@ def stop_feeding_sequence():
 
             if drain_valve_ip and drain_valve and valve_relays.get(drain_valve_label, {}).get('status') == 'on':
                 control_valve(plant_ip, drain_valve_ip, drain_valve, drain_valve_label, 'off', sio=socketio_instance)
-                log_feeding_feedback(f"Turned off drain valve {drain_valve} ({drain_valve_label}) for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
+                log_extended_feedback(f"Turned off drain valve {drain_valve} ({drain_valve_label}) for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
 
             if fill_valve_ip and fill_valve and valve_relays.get(fill_valve_label, {}).get('status') == 'on':
                 control_valve(plant_ip, fill_valve_ip, fill_valve, fill_valve_label, 'off', sio=socketio_instance)
-                log_feeding_feedback(f"Turned off fill valve {fill_valve} ({fill_valve_label}) for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
+                log_extended_feedback(f"Turned off fill valve {fill_valve} ({fill_valve_label}) for plant {plant_ip}", plant_ip, status='success', sio=socketio_instance)
 
             message.append(f"Stopped {plant_ip}")
 

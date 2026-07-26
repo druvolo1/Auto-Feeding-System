@@ -112,7 +112,9 @@ def get_settings():
     })
     # Ensure notification settings exist with defaults
     settings.setdefault('discord_enabled', True)
-    settings.setdefault('discord_webhook_url', "https://discordapp.com/api/webhooks/1351717917825175642/72z2SftBRomY4zKefGUh9if2tthV8n9iSvnJF804v9Sfi8PUy9i-Sp3IOz6UZZwE1zjR")
+    # Never hardcode a real webhook here - this file is in a public repo. The live
+    # URL belongs in data/settings.json (untracked) and is set through the UI.
+    settings.setdefault('discord_webhook_url', "")
     settings.setdefault('telegram_enabled', False)
     settings.setdefault('telegram_bot_token', '')
     settings.setdefault('telegram_chat_id', '')
@@ -185,8 +187,8 @@ def update_settings():
                 isinstance(drain_flow_settings.get('activation_delay'), (int, float)) and
                 isinstance(drain_flow_settings.get('min_flow_check_delay'), (int, float)) and
                 isinstance(drain_flow_settings.get('max_drain_time'), (int, float))):
-                if drain_flow_settings['min_flow_rate'] >= drain_flow_settings['activation_flow_rate']:
-                    return jsonify({"status": "failure", "error": "Minimum flow rate must be less than activation flow rate"}), 400
+                if drain_flow_settings['min_flow_rate'] > drain_flow_settings['activation_flow_rate']:
+                    return jsonify({"status": "failure", "error": "Minimum flow rate must not exceed activation flow rate"}), 400
                 if drain_flow_settings['max_drain_time'] <= 0:
                     return jsonify({"status": "failure", "error": "Max drain time must be greater than 0"}), 400
                 settings['drain_flow_settings'] = drain_flow_settings

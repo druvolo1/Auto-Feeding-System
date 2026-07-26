@@ -1,7 +1,14 @@
 from flask import Blueprint, jsonify, request, current_app
 from services.log_service import log_event
-from services.feeding_service import start_feeding_sequence, stop_feeding_sequence
+from services.feeding_service import (
+    start_feeding_sequence,
+    stop_feeding_sequence,
+    get_live_allow_remote_feeding,
+)
+from utils.mdns_utils import standardize_host_ip
+from utils.settings_utils import load_settings
 from datetime import datetime
+import time
 
 feeding_blueprint = Blueprint('feeding', __name__)
 
@@ -86,3 +93,53 @@ def stop_all_feeding():
 @feeding_blueprint.route('/status', methods=['GET'])
 def get_feeding_status():
     return jsonify({"status": "not_implemented"})
+
+@feeding_blueprint.route('/preflight', methods=['GET'])
+def feeding_preflight():
+    """Report exactly which plants a Start All would feed, and why the rest are skipped.
+
+    Reads each zone's permission flag live rather than trusting the socket cache.
+    """
+    stale_after = current_app.config.get('PLANT_STALE_AFTER', 35)
+    plant_data = current_app.config.get('plant_data', {})
+    plant_clients = current_app.config.get('plant_clients', {})
+    plants = []
+
+    for host in load_settings().get('additional_plants', []):
+        last_update = (plant_data.get(host) or {}).get('last_update')
+        age = None if not last_update else round(max(0.0, time.time() - last_update / 1000.0), 1)
+
+        entry = {
+            'host': host,
+            'ip': standardize_host_ip(host),
+            'socket_connected': bool(getattr(plant_clients.get(host), 'connected', False)),
+            'socket_age_s': age,
+            'allow_remote_feeding_live': None,
+            'will_feed': False,
+            'reason': None
+        }
+
+        allowed, error = get_live_allow_remote_feeding(host)
+        if error:
+            entry['reason'] = error
+        else:
+            entry['allow_remote_feeding_live'] = allowed
+            if not allowed:
+                entry['reason'] = 'remote_feeding_disabled'
+            elif age is None:
+                entry['reason'] = 'no_telemetry'
+            elif age > stale_after:
+                entry['reason'] = 'stale_telemetry'
+            else:
+                entry['will_feed'] = True
+                entry['reason'] = 'ok'
+
+        plants.append(entry)
+
+    return jsonify({
+        "status": "success",
+        "stale_after_s": stale_after,
+        "will_feed": [p['host'] for p in plants if p['will_feed']],
+        "skipped": [{'host': p['host'], 'reason': p['reason']} for p in plants if not p['will_feed']],
+        "plants": plants
+    })

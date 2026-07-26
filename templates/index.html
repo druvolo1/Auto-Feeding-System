@@ -250,40 +250,68 @@
         });
 
         let headersSet = false;
-        let lastUpdateCache = {};
         let plantsData = [];
 
-        // Helper function to toggle remote feeding
-        function toggleRemoteFeeding(ip, current) {
-            const newValue = !current;
-            let url = ip ? `http://${ip}:8000/api/plant_info/` : '/api/plant_info/';
-            fetch(url, {
+        function addFeedbackLine(text, className) {
+            const feedbackContainer = document.getElementById('feeding-feedback');
+            const message = document.createElement('p');
+            message.className = className;
+            message.innerText = `[${new Date().toLocaleString()}] ${text}`;
+            feedbackContainer.prepend(message);
+        }
+
+        // Set remote feeding to an ABSOLUTE value via the feeding server, which posts
+        // to the zone and returns the value the zone actually saved. Never sends the
+        // inverse of a cached boolean - a stale cache used to invert the request.
+        function setRemoteFeeding(host, ip, desiredValue, buttons) {
+            buttons.forEach(b => b.disabled = true);
+            fetch('/api/plants/allow_remote_feeding', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({allow_remote_feeding: newValue})
+                body: JSON.stringify({host: host, value: desiredValue})
             })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to toggle remote feeding');
+            .then(response => response.json().then(data => ({ok: response.ok, data})))
+            .then(({ok, data}) => {
+                if (!ok || data.status !== 'success') {
+                    throw new Error(data.error || 'Failed to set remote feeding');
                 }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Toggle success:', data);
-                const feedbackContainer = document.getElementById('feeding-feedback');
-                const message = document.createElement('p');
-                message.className = 'success';
-                message.innerText = `[${new Date().toLocaleString()}] Toggled remote feeding for ${ip || 'local'} to ${newValue ? 'Yes' : 'No'}`;
-                feedbackContainer.prepend(message);
+                applyRemoteFeedingResult(host, data.allow_remote_feeding);
+                addFeedbackLine(`Remote feeding for ${host} set to ${data.allow_remote_feeding ? 'Yes' : 'No'} (confirmed by zone)`, 'success');
             })
             .catch(error => {
-                console.error('Error toggling remote feeding:', error);
-                const feedbackContainer = document.getElementById('feeding-feedback');
-                const message = document.createElement('p');
-                message.className = 'error';
-                message.innerText = `[${new Date().toLocaleString()}] Error toggling remote feeding for ${ip || 'local'}: ${error.message}`;
-                feedbackContainer.prepend(message);
+                // The feeding server could not reach the zone; the browser still might.
+                console.error('Proxy set failed, trying direct:', error);
+                const directUrl = ip ? `http://${ip}:8000/api/plant_info/` : '/api/plant_info/';
+                return fetch(directUrl, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({allow_remote_feeding: desiredValue})
+                })
+                .then(response => {
+                    if (!response.ok) { throw new Error('Direct set failed'); }
+                    return response.json();
+                })
+                .then(data => {
+                    const value = !!(data.settings || {}).allow_remote_feeding;
+                    applyRemoteFeedingResult(host, value);
+                    addFeedbackLine(`Remote feeding for ${host} set to ${value ? 'Yes' : 'No'} directly on the zone (feeding server cache not refreshed)`, 'success');
+                })
+                .catch(directError => {
+                    addFeedbackLine(`Error setting remote feeding for ${host}: ${error.message}; direct attempt: ${directError.message}`, 'error');
+                });
+            })
+            .finally(() => {
+                buttons.forEach(b => b.disabled = false);
             });
+        }
+
+        function applyRemoteFeedingResult(host, value) {
+            const plant = plantsData.find(p => p.original_host === host);
+            if (plant) {
+                plant.settings = plant.settings || {};
+                plant.settings.allow_remote_feeding = value;
+                renderPlantsTable(plantsData);
+            }
         }
 
         // Helper function to render the plants table
@@ -316,6 +344,7 @@
                         <th>Current pH</th>
                         <th>Feeding in Progress</th>
                         <th>Allow Remote Feeding</th>
+                        <th>Link</th>
                         <th>Heartbeat</th>
                         ${sensorHeaders.map(label => `<th>${label}</th>`).join('')}
                         <th>Fill Valve</th>
@@ -331,17 +360,17 @@
                 const row = document.createElement('tr');
 
                 const plantKey = plant.ip || 'local';
-                const isOffline = plant.is_online === false || plant.is_online === undefined;
+                const dataStatus = plant.data_status || (plant.is_online ? 'live' : 'offline');
+                const isStale = dataStatus === 'stale';
+                const isOffline = dataStatus !== 'live';
 
-                if (!isOffline && plant.last_update) {
-                    lastUpdateCache[plantKey] = plant.last_update;
-                }
-
-                const effectiveLastUpdate = plant.last_update || lastUpdateCache[plantKey];
+                // Show the real timestamp only. Never fall back to a remembered one -
+                // that used to disguise a frozen feed as a live plant.
+                const effectiveLastUpdate = plant.last_update;
 
                 if (isOffline) {
                     row.classList.add('disconnected');
-                    console.warn(`Plant ${plantKey} is offline or has undefined is_online`);
+                    console.warn(`Plant ${plantKey} data_status=${dataStatus}`);
                 }
 
                 // Add currently-feeding class if applicable
@@ -374,24 +403,53 @@
                 row.appendChild(feedingInProgressTd);
 
                 const allowRemoteTd = document.createElement('td');
-                const allowStatus = isOffline ? 'Offline' : (plant.settings?.allow_remote_feeding ? 'Yes' : 'No');
+                const allowed = !!plant.settings?.allow_remote_feeding;
                 const textSpan = document.createElement('span');
-                textSpan.innerText = allowStatus;
+                // Stale/offline rows still show the last known value, marked as unverified,
+                // instead of hiding it - and the buttons stay usable so a wedged plant can
+                // still be corrected.
+                textSpan.innerText = (dataStatus === 'live') ? (allowed ? 'Yes' : 'No')
+                                                             : (allowed ? 'Yes?' : 'No?');
                 textSpan.style.marginRight = '10px';
                 allowRemoteTd.appendChild(textSpan);
-                if (!isOffline) {
-                    const toggleBtn = document.createElement('button');
-                    toggleBtn.innerText = 'Toggle';
-                    toggleBtn.className = 'toggle-button';
-                    toggleBtn.onclick = function() {
-                        toggleRemoteFeeding(plant.ip, plant.settings.allow_remote_feeding);
-                    };
-                    allowRemoteTd.appendChild(toggleBtn);
-                }
+
+                const enableBtn = document.createElement('button');
+                enableBtn.innerText = 'Enable';
+                enableBtn.className = 'toggle-button';
+                const disableBtn = document.createElement('button');
+                disableBtn.innerText = 'Disable';
+                disableBtn.className = 'toggle-button';
+                const buttons = [enableBtn, disableBtn];
+                enableBtn.disabled = (dataStatus === 'live') && allowed;
+                disableBtn.disabled = (dataStatus === 'live') && !allowed;
+                enableBtn.onclick = function() {
+                    setRemoteFeeding(plant.original_host, plant.ip, true, buttons);
+                };
+                disableBtn.onclick = function() {
+                    setRemoteFeeding(plant.original_host, plant.ip, false, buttons);
+                };
+                allowRemoteTd.appendChild(enableBtn);
+                allowRemoteTd.appendChild(disableBtn);
                 row.appendChild(allowRemoteTd);
+
+                const linkTd = document.createElement('td');
+                if (dataStatus === 'live') {
+                    linkTd.innerText = 'LIVE';
+                    linkTd.style.color = '#2e7d32';
+                } else if (isStale) {
+                    const ageMin = Math.round((plant.last_update_age_s || 0) / 60);
+                    linkTd.innerText = ageMin >= 1 ? `STALE ${ageMin}m` : `STALE ${Math.round(plant.last_update_age_s)}s`;
+                    linkTd.style.color = '#e65100';
+                } else {
+                    linkTd.innerText = 'OFFLINE';
+                    linkTd.style.color = '#c62828';
+                }
+                linkTd.style.fontWeight = 'bold';
+                row.appendChild(linkTd);
 
                 const heartbeatTd = document.createElement('td');
                 heartbeatTd.innerText = effectiveLastUpdate ? new Date(effectiveLastUpdate).toLocaleString() : 'N/A';
+                if (isStale) { heartbeatTd.style.color = '#e65100'; }
                 row.appendChild(heartbeatTd);
 
                 sensorKeys.forEach(key => {
@@ -447,6 +505,43 @@
                 console.warn('Feeding sequence already active, ignoring start request');
                 return;
             }
+            // Ask the server which zones will actually be fed - checked live against each
+            // zone, not against the cached table - and confirm before opening any valve.
+            const startButton = document.getElementById('start-all-feeding');
+            startButton.disabled = true;
+            fetch('/api/feeding/preflight')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        throw new Error(data.error || 'Pre-flight check failed');
+                    }
+                    const willFeed = data.will_feed || [];
+                    const skipped = data.skipped || [];
+                    let summary = willFeed.length
+                        ? `Will feed (${willFeed.length}): ${willFeed.join(', ')}`
+                        : 'No plants will be fed.';
+                    if (skipped.length) {
+                        summary += `\n\nSkipped:\n${skipped.map(s => `  ${s.host} - ${s.reason}`).join('\n')}`;
+                    }
+                    if (!willFeed.length) {
+                        alert(summary);
+                        return false;
+                    }
+                    return confirm(`${summary}\n\nStart feeding?`);
+                })
+                .then(confirmed => {
+                    if (confirmed) { doStartAllFeeding(); }
+                })
+                .catch(error => {
+                    console.error('Pre-flight failed:', error);
+                    alert(`Pre-flight check failed: ${error.message}`);
+                })
+                .finally(() => {
+                    updateFeedingButtons();
+                });
+        }
+
+        function doStartAllFeeding() {
             fetch('/api/feeding/start_all', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
