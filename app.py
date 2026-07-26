@@ -282,9 +282,10 @@ def _do_connect(plant):
     @sio.event(namespace='/status')
     def connect():
         try:
+            # Routine connect: debug print only. Writing this to the log put 13
+            # lines in feeding.jsonl on every restart and drowned real events.
             if debug_states.get('socket-connections', False):
                 print(f"[INFO] Connected to remote plant: {plant} at {ip}")
-            log_feeding_feedback(f"Connected to remote plant: {plant} at {ip}", plant, status='success')
             with plant_lock:
                 if plant in plant_data:
                     plant_data[plant]['is_online'] = True
@@ -341,7 +342,6 @@ def _do_connect(plant):
     plant_clients[plant] = sio
     if debug_states.get('socket-connections', False):
         print(f"[DEBUG] Connect attempt to {plant} at {ip}:8000 succeeded")
-    log_feeding_feedback(f"Connection succeeded to {plant} at {ip}:8000", plant, status='success')
     return True
 
 
@@ -362,7 +362,9 @@ def retire_client(plant):
     with plant_lock:
         plant_data.pop(plant, None)
     if client is not None:
-        log_feeding_feedback(f"Retiring socket client for {plant}", plant, status='info')
+        # The watchdog already logs why it is rebuilding; this would just repeat it.
+        if debug_states.get('socket-connections', False):
+            print(f"[DEBUG] Retiring socket client for {plant}")
         eventlet.spawn(_abandon_client, client)
 
 
@@ -373,7 +375,6 @@ def reload_plants():
     additional_plants = settings.get('additional_plants', [])
     if debug_states.get('plants', False):
         print(f"[DEBUG] Loaded additional_plants: {additional_plants}")
-    log_feeding_feedback(f"Loaded {len(additional_plants)} additional plants: {additional_plants}", status='info')
 
     if not additional_plants:
         log_feeding_feedback("No additional plants configured in settings", status='error')
@@ -391,8 +392,9 @@ def reload_plants():
             retire_client(plant)
             log_feeding_feedback(f"Disconnected removed plant {plant}", plant, status='info')
 
-    connected_plants = [p for p, c in list(plant_clients.items()) if c.connected]
-    log_feeding_feedback(f"Plant clients after reload: {connected_plants}", status='info')
+    if debug_states.get('plants', False):
+        connected_plants = [p for p, c in list(plant_clients.items()) if c.connected]
+        print(f"[DEBUG] Plant clients after reload: {connected_plants}")
 
 
 def monitor_remote_plants():
